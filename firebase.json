@@ -2,13 +2,12 @@
   "hosting": {
     "public": "public",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [
-      {
-        "source": "/api/**",
-        "function": "api",
-        "region": "asia-southeast1"
-      }
-    ],
+"rewrites": [
+  {
+    "source": "/api/**",
+    "destination": "https://poe-stash-api.onrender.com/api/**"
+  }
+],
     "headers": [
       {
         "source": "**",
