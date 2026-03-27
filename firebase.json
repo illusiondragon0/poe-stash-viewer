@@ -1,28 +1,16 @@
 {
   "hosting": {
     "public": "public",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-"rewrites": [
-  {
-    "source": "/api/**",
-    "destination": "https://poe-stash-api.onrender.com/api/**"
-  }
-],
-    "headers": [
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
       {
-        "source": "**",
-        "headers": [
-          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
-        ]
+        "source": "/api/**",
+        "destination": "https://poe-stash-api.onrender.com/api/**"
       }
     ]
-  },
-  "functions": {
-    "source": "functions",
-    "runtime": "nodejs20"
-  },
-  "firestore": {
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
   }
 }
