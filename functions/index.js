@@ -257,7 +257,6 @@ app.get('/api/ninja-prices', async (req, res) => {
   res.json({ prices: priceMap, stashItems: stashItemMap, stashNames: stashNameMap, clusterMap, divinePrice });
 });
 
-// Export as Firebase Function (v2)
-exports.api = onRequest({ region: 'asia-southeast1', timeoutSeconds: 120, memory: '512MiB' }, app);
+// แทน exports.api = onRequest(...)
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server ready on port ${PORT}`));
+app.listen(PORT, () => console.log(`Ready on port ${PORT}`));
