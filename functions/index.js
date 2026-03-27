@@ -5,7 +5,17 @@ const { onRequest } = require('firebase-functions/v2/https');
 const express        = require('express');
 const fetch          = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
 
-const app  = express();
+const app = express();
+
+// เพิ่มตรงนี้
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
 const H_NINJA = { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' };
 const BASE_NINJA = 'https://poe.ninja';
 
@@ -252,3 +262,5 @@ app.get('/api/ninja-prices', async (req, res) => {
 
 // Export as Firebase Function (v2)
 exports.api = onRequest({ region: 'asia-southeast1', timeoutSeconds: 120, memory: '512MiB' }, app);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server ready on port ${PORT}`));
