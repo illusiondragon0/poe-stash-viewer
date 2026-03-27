@@ -29,7 +29,9 @@ const POE_HEADERS = (sessid) => ({
 
 // ── /api/tabs ──────────────────────────────────────────────────────────────
 app.get('/api/tabs', async (req, res) => {
-  const { accountName, league, sessid } = req.query;
+  const accountName = req.query.account;
+const POESESSID = req.query.sessid;
+const league = req.query.league;
   if (!accountName || !sessid) return res.status(400).json({ error: 'missing params' });
   const url = `https://www.pathofexile.com/character-window/get-stash-items`
     + `?accountName=${encodeURIComponent(accountName)}`
