@@ -245,6 +245,7 @@ td.tab-cell{color:var(--text2);font-size:12px}
 </div>
 
 <script>
+  const API_BASE = 'https://YOUR-APP.up.railway.app'; // ใส่ทีหลังหลัง deploy Railway
 // ── STATE ──
 let allItems    = [];
 let ninjaMap    = {};   // name.lower → { chaosValue, icon, source }
@@ -272,7 +273,7 @@ async function init(){
   setStatus('กำลังโหลด Stash Tabs…','');
   loadNinjaPrices(league);
   try{
-    const res = await fetch(`/api/tabs?accountName=${enc(account)}&league=${enc(league)}&sessid=${enc(sessid)}`);
+    fetch(`${API_BASE}/api/tabs?...`)
     let data; try{data=await res.json();}catch{throw new Error('ไม่สามารถเชื่อมต่อ server.js');}
     if(!res.ok) throw new Error(data.error||`HTTP ${res.status}`);
     if(!data.tabs?.length) throw new Error('ไม่พบ Stash Tab');
@@ -331,7 +332,7 @@ async function loadSelected(){
     setStatus(`โหลด: ${tab.n} (${i+1}/${selected.length})…`,'');
     setProgress((i/selected.length)*100);
     try{
-      const res=await fetch(`/api/stash?accountName=${enc(account)}&league=${enc(league)}&tabIndex=${idx}&sessid=${enc(sessid)}`);
+      fetch(`${API_BASE}/api/stash?...`)
       let data; try{data=await res.json();}catch{throw new Error('ไม่สามารถเชื่อมต่อ server.js');}
       if(!res.ok) throw new Error(data.error||`HTTP ${res.status}`);
       if(data.items) data.items.forEach(it=>{it._tabName=tab.n;it._tabType=tab.type;});
@@ -760,7 +761,7 @@ function doSort(key){
 async function loadNinjaPrices(league){
   setBadge('loading','⏳ poe.ninja…');
   try{
-    const res=await fetch(`/api/ninja-prices?league=${enc(league)}`);
+    fetch(`${API_BASE}/api/ninja-prices?...`)
     if(!res.ok)throw new Error(`HTTP ${res.status}`);
     const data=await res.json();
     ninjaMap    = data.prices    || {};
