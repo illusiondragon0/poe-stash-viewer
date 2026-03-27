@@ -1,6 +1,7 @@
 // Firebase Cloud Function — wraps the Express app from server.js
 // Deploy: firebase deploy --only functions
-
+const cors = require('cors');
+app.use(cors());
 const { onRequest } = require('firebase-functions/v2/https');
 const express        = require('express');
 const fetch          = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
@@ -29,20 +30,40 @@ const POE_HEADERS = (sessid) => ({
 
 // ── /api/tabs ──────────────────────────────────────────────────────────────
 app.get('/api/tabs', async (req, res) => {
-  const accountName = req.query.account;
-const POESESSID = req.query.sessid;
-const league = req.query.league;
-  if (!accountName || !sessid) return res.status(400).json({ error: 'missing params' });
-  const url = `https://www.pathofexile.com/character-window/get-stash-items`
-    + `?accountName=${encodeURIComponent(accountName)}`
-    + `&league=${encodeURIComponent(league || 'Mirage')}&tabIndex=0&tabs=1`;
   try {
-    const r    = await fetch(url, { headers: POE_HEADERS(sessid) });
-    const text = await r.text();
-    if (!r.ok) return res.status(r.status).json({ error: `PoE API: ${r.status}`, body: text });
-    res.setHeader('Content-Type', 'application/json');
-    res.send(text);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    const accountName = req.query.account;
+    const POESESSID = req.query.sessid;
+    const league = req.query.league;
+
+    if (!accountName || !POESESSID || !league) {
+      return res.status(400).json({ error: "missing params" });
+    }
+
+    const response = await fetch(
+      `https://www.pathofexile.com/character-window/get-stash-items?accountName=${encodeURIComponent(accountName)}&league=${encodeURIComponent(league)}&tabs=1`,
+      {
+        headers: {
+          Cookie: `POESESSID=${POESESSID}`,
+          'User-Agent': 'Mozilla/5.0'
+        }
+      }
+    );
+
+    const text = await response.text(); // 🔥 กัน crash
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return res.status(500).json({ error: "Invalid JSON from PoE", raw: text });
+    }
+
+    res.json(data);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── /api/stash ─────────────────────────────────────────────────────────────
