@@ -268,21 +268,47 @@ function tabIcon(type){ return TAB_ICONS[type] || '📦'; }
 
 // ── INIT ──
 async function init(){
-  const account = v('account'), sessid = v('sessid'), league = v('league');
-  if(!account||!sessid){setStatus('กรุณากรอก Account และ POESESSID','error');return;}
+  const account = v('account');
+  const sessid = v('sessid');
+  const league = v('league');
+
+  if(!account||!sessid){
+    setStatus('กรุณากรอก Account และ POESESSID','error');
+    return;
+  }
+
   setStatus('กำลังโหลด Stash Tabs…','');
-  loadNinjaPrices(league);
+
+  // โหลด ninja
+  await loadNinjaPrices(league);
+
   try{
-    fetch(`${API_BASE}/api/tabs?...`)
-    let data; try{data=await res.json();}catch{throw new Error('ไม่สามารถเชื่อมต่อ server.js');}
+    const res = await fetch(
+      `${API_BASE}/api/tabs?account=${enc(account)}&sessid=${enc(sessid)}&league=${enc(league)}`
+    );
+
+    let data;
+    try{
+      data = await res.json();
+    }catch{
+      throw new Error('ไม่สามารถเชื่อมต่อ server.js');
+    }
+
     if(!res.ok) throw new Error(data.error||`HTTP ${res.status}`);
     if(!data.tabs?.length) throw new Error('ไม่พบ Stash Tab');
+
     tabsData = data.tabs;
+
     renderSidebar();
+
     document.getElementById('sidebarActions').style.display='flex';
     document.getElementById('btnLoad').style.display='block';
+
     setStatus(`พบ ${data.tabs.length} tabs — เลือก tab แล้วกด Load Items`,'success');
-  }catch(e){setStatus(`⚠ ${e.message}`,'error');}
+
+  }catch(e){
+    setStatus(`⚠ ${e.message}`,'error');
+  }
 }
 
 // ── SIDEBAR ──
@@ -332,7 +358,9 @@ async function loadSelected(){
     setStatus(`โหลด: ${tab.n} (${i+1}/${selected.length})…`,'');
     setProgress((i/selected.length)*100);
     try{
-      fetch(`${API_BASE}/api/stash?...`)
+      const res = await fetch(
+  `${API_BASE}/api/stash?account=${enc(account)}&sessid=${enc(sessid)}&league=${enc(league)}&tabIndex=${idx}`
+);
       let data; try{data=await res.json();}catch{throw new Error('ไม่สามารถเชื่อมต่อ server.js');}
       if(!res.ok) throw new Error(data.error||`HTTP ${res.status}`);
       if(data.items) data.items.forEach(it=>{it._tabName=tab.n;it._tabType=tab.type;});
@@ -760,9 +788,9 @@ function doSort(key){
 // ── NINJA ──
 async function loadNinjaPrices(league) {
   try {
-    const url = `${API_BASE}/api/ninja-prices?league=${league}`;
-
-    const res = await fetch(url);   // ✅ แก้ตรงนี้
+    const res = await fetch(
+      `${API_BASE}/api/ninja-prices?league=${enc(league)}`
+    );
 
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
@@ -770,11 +798,20 @@ async function loadNinjaPrices(league) {
 
     const data = await res.json();
 
-    return data;
+    ninjaMap   = data.prices || {};
+    stashItems = data.stashItems || {};
+    stashNames = data.stashNames || {};
+    clusterMap = data.clusterMap || {};
+    divinePrice = data.divinePrice || 1;
+
+    document.getElementById('ninjaBadge').textContent = 'poe.ninja: OK';
+    document.getElementById('ninjaBadge').className = 'ninja-status';
 
   } catch (err) {
     console.error("poe.ninja ล้มเหลว:", err);
-    return null;
+
+    document.getElementById('ninjaBadge').textContent = 'poe.ninja: ERROR';
+    document.getElementById('ninjaBadge').className = 'ninja-status error';
   }
 }
 
