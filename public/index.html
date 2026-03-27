@@ -758,28 +758,24 @@ function doSort(key){
 }
 
 // ── NINJA ──
-async function loadNinjaPrices(league){
-  setBadge('loading','⏳ poe.ninja…');
-  try{
-    fetch(`${API_BASE}/api/ninja-prices?...`)
-    if(!res.ok)throw new Error(`HTTP ${res.status}`);
-    const data=await res.json();
-    ninjaMap    = data.prices    || {};
-    stashItems  = data.stashItems|| {};
-    stashNames  = data.stashNames|| {};
-    clusterMap  = data.clusterMap|| {};
-    divinePrice = data.divinePrice || ninjaMap['divine orb']?.chaosValue || 1;
-    const cnt   = Object.keys(ninjaMap).length;
-    const sn    = Object.keys(stashItems).length;
-    setBadge('ok',`✓ poe.ninja ${cnt.toLocaleString()} + ${sn.toLocaleString()} variants · 1d=${Math.round(divinePrice)}c`);
-    if(allItems.length){renderTable();updateWealth();}
-  }catch(e){console.error(e);setBadge('error','✗ poe.ninja ล้มเหลว');}
-}
+async function loadNinjaPrices(league) {
+  try {
+    const url = `${API_BASE}/api/ninja-prices?league=${league}`;
 
-function setBadge(s,t){
-  const b=document.getElementById('ninjaBadge');
-  b.textContent=t;
-  b.className='ninja-status'+(s==='ok'?'':s==='error'?' error':' loading');
+    const res = await fetch(url);   // ✅ แก้ตรงนี้
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    return data;
+
+  } catch (err) {
+    console.error("poe.ninja ล้มเหลว:", err);
+    return null;
+  }
 }
 
 // ── UTILS ──
