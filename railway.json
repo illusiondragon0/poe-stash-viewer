@@ -1,0 +1,9 @@
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "node functions/index.js",
+    "restartPolicyType": "ON_FAILURE"
+  }
+}

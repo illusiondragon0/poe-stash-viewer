@@ -1,0 +1,41 @@
+name: Deploy to Firebase
+
+on:
+  push:
+    branches:
+      - main          # deploy ทุกครั้งที่ push มา main
+  workflow_dispatch:  # กด deploy มือได้จาก GitHub Actions tab
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Checkout code
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Setup Node.js
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: functions/package.json
+
+      # 3. Install functions dependencies
+      - name: Install Functions dependencies
+        run: npm ci
+        working-directory: functions
+
+      # 4. Deploy to Firebase (Hosting + Functions + Firestore rules)
+      - name: Deploy to Firebase
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          projectId: '${{ secrets.FIREBASE_PROJECT_ID }}'
+          channelId: live
+          # deploy functions + hosting ด้วยกัน
+          entryPoint: '.'
+        env:
+          FIREBASE_CLI_EXPERIMENTS: webframeworks
