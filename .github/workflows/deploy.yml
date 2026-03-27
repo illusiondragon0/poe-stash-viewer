@@ -24,7 +24,7 @@ jobs:
 
       # 3. Install functions dependencies
       - name: Install Functions dependencies
-        run: npm install
+        run: npm ci
         working-directory: functions
 
       # 4. Deploy to Firebase (Hosting + Functions + Firestore rules)
