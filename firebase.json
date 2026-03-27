@@ -1,29 +1,6 @@
 {
   "hosting": {
     "public": "public",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [
-      {
-        "source": "/api/**",
-        "function": "api",
-        "region": "asia-southeast1"
-      }
-    ],
-    "headers": [
-      {
-        "source": "**",
-        "headers": [
-          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
-        ]
-      }
-    ]
-  },
-  "functions": {
-    "source": "functions",
-    "runtime": "nodejs20"
-  },
-  "firestore": {
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
   }
 }
