@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>PoE Stash Viewer</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#1a1a1a;--bg2:#242424;--bg3:#2d2d2d;--bg4:#353535;
+  --border:#3a3a3a;--text:#c8c8c8;--text2:#999;--text3:#666;
+  --gold:#c8aa6e;--gold2:#f0d080;
+  --green:#4caf50;--green2:#81c784;
+  --blue:#5c9bdb;--red:#e57373;
+  --unique:#af6025;--rare:#c8b400;--magic:#8888ff;--normal:#aaa;--gem:#1ba29b;--currency:#c8a040;
+  --accent:#4a90d9;
+}
+body{font-family:'Noto Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+
+/* ── TOP BAR ── */
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16px;height:48px;display:flex;align-items:center;gap:12px}
+.topbar-logo{font-weight:700;font-size:16px;color:var(--gold);letter-spacing:.05em;margin-right:8px}
+.topbar input,.topbar select{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:4px;font-size:13px;outline:none}
+.topbar input:focus,.topbar select:focus{border-color:var(--accent)}
+.topbar input{width:180px}
+.topbar input[type=password]{width:200px;letter-spacing:.1em}
+.topbar label-sm{font-size:11px;color:var(--text2);white-space:nowrap}
+.topbar-group{display:flex;flex-direction:column;gap:2px}
+.btn{padding:6px 14px;border-radius:4px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#3a7fc8}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.btn-ghost{background:var(--bg3);color:var(--text);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--text3);background:var(--bg4)}
+.ninja-status{font-size:11px;padding:3px 8px;border-radius:3px;background:rgba(76,175,80,.12);color:#81c784;border:1px solid rgba(76,175,80,.25);white-space:nowrap}
+.ninja-status.loading{background:rgba(100,100,100,.12);color:var(--text2);border-color:var(--border)}
+.ninja-status.error{background:rgba(229,115,115,.1);color:#e57373;border-color:rgba(229,115,115,.25)}
+
+/* ── LAYOUT ── */
+.layout{display:flex;height:calc(100vh - 48px)}
+
+/* ── SIDEBAR ── */
+.sidebar{width:180px;min-width:180px;background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:8px 0}
+.sidebar-title{font-size:11px;color:var(--text3);letter-spacing:.1em;padding:8px 14px 4px;text-transform:uppercase}
+.tab-item{display:flex;align-items:center;gap:8px;padding:6px 14px;cursor:pointer;border-radius:0;transition:background .1s;user-select:none}
+.tab-item:hover{background:var(--bg3)}
+.tab-item.checked{color:var(--gold)}
+.tab-item .tab-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.tab-item .tab-name{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tab-item .cb{width:16px;height:16px;border:2px solid var(--border);border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--bg3);transition:all .1s}
+.tab-item.checked .cb{background:var(--accent);border-color:var(--accent)}
+.tab-item .cb svg{display:none}
+.tab-item.checked .cb svg{display:block}
+.sidebar-actions{padding:8px 14px;display:flex;gap:6px}
+.sidebar-actions .btn{flex:1;padding:4px 6px;font-size:11px}
+
+/* ── MAIN ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── WEALTH HEADER ── */
+.wealth-header{background:var(--bg2);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.wealth-title{font-size:18px;font-weight:700;color:var(--text)}
+.wealth-value{font-size:28px;font-weight:700;color:var(--gold2)}
+.wealth-value .unit{font-size:16px;color:var(--gold);margin-left:4px}
+.wealth-change{font-size:13px;padding:2px 8px;border-radius:3px;background:rgba(76,175,80,.12);color:var(--green2);border:1px solid rgba(76,175,80,.2)}
+.wealth-breakdown{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+.breakdown-item{display:flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px}
+.breakdown-item img{width:20px;height:20px;object-fit:contain}
+.breakdown-val{color:var(--gold);font-weight:600}
+
+/* ── TOOLBAR ── */
+.toolbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.search-wrap{position:relative;flex:1;min-width:160px;max-width:280px}
+.search-wrap input{width:100%;padding:6px 10px 6px 30px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;outline:none}
+.search-wrap input:focus{border-color:var(--accent)}
+.search-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px}
+.filter-select{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:4px;font-size:13px;outline:none}
+.total-badge{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:5px 12px;font-size:13px;color:var(--text2);white-space:nowrap}
+.total-badge span{color:var(--gold2);font-weight:700}
+.toolbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.sync-info{font-size:11px;color:var(--text3)}
+.btn-load{background:var(--accent);color:#fff;border:none;padding:6px 16px;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer}
+.btn-load:hover{background:#3a7fc8}
+.btn-load:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── TABLE ── */
+.table-container{flex:1;overflow:auto}
+table{width:100%;border-collapse:collapse}
+thead{position:sticky;top:0;z-index:10}
+thead tr{background:var(--bg2);border-bottom:2px solid var(--border)}
+th{padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text2);letter-spacing:.05em;white-space:nowrap;cursor:pointer;user-select:none}
+th:hover{color:var(--text)}
+th.num{text-align:right}
+th .sort-icon{margin-left:4px;opacity:.4;font-size:10px}
+th.sorted .sort-icon{opacity:1;color:var(--gold)}
+tbody tr{border-bottom:1px solid rgba(255,255,255,.04);transition:background .1s}
+tbody tr:hover{background:rgba(255,255,255,.04)}
+td{padding:8px 14px;font-size:13px;vertical-align:middle}
+td.num{text-align:right}
+td.icon-cell{width:36px;padding:6px 8px}
+td.icon-cell img{width:28px;height:28px;object-fit:contain;display:block}
+td.name-cell{max-width:260px}
+.item-name{font-size:13px;font-weight:500}
+.item-base{font-size:11px;color:var(--text2);margin-top:1px}
+td.qty-cell{color:var(--text);font-weight:600;font-size:13px}
+td.price-cell{color:#e8d890}
+td.total-cell{color:var(--gold2);font-weight:700}
+td.no-price{color:var(--text3);font-size:12px}
+td.tab-cell{color:var(--text2);font-size:12px}
+.rarity-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;flex-shrink:0}
+.name-wrap{display:flex;align-items:center}
+.r-Normal .rarity-dot{background:var(--normal)}
+.r-Magic .rarity-dot{background:var(--magic)}
+.r-Rare .rarity-dot{background:var(--rare)}
+.r-Unique .rarity-dot{background:var(--unique)}
+.r-Gem .rarity-dot{background:var(--gem)}
+.r-Currency .rarity-dot{background:var(--currency)}
+.r-Divination .rarity-dot{background:#a66}
+.r-Normal .item-name{color:var(--normal)}
+.r-Magic .item-name{color:var(--magic)}
+.r-Rare .item-name{color:var(--rare)}
+.r-Unique .item-name{color:var(--unique)}
+.r-Gem .item-name{color:var(--gem)}
+.r-Currency .item-name{color:var(--currency)}
+.r-Divination .item-name{color:#c88}
+
+/* ── STATUS BAR ── */
+.statusbar{background:var(--bg2);border-top:1px solid var(--border);padding:5px 16px;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:8px;height:28px}
+.statusbar.error{color:var(--red)}
+.statusbar.success{color:var(--green2)}
+.progress{flex:1;max-width:200px;height:3px;background:var(--bg3);border-radius:2px;overflow:hidden}
+.progress-fill{height:100%;background:var(--accent);width:0%;transition:width .2s}
+
+/* ── EMPTY ── */
+.empty{text-align:center;padding:60px 20px;color:var(--text3)}
+.empty .ico{font-size:40px;opacity:.3;margin-bottom:12px}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#555}
+
+@media(max-width:900px){
+  .topbar input[type=password]{width:140px}
+  .wealth-breakdown{display:none}
+  .sidebar{width:140px;min-width:140px}
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <span class="topbar-logo">⚔ PoE Stash</span>
+  <div class="topbar-group">
+    <span style="font-size:11px;color:var(--text2)">Account</span>
+    <input id="account" type="text" value="illusionDragon#2899" placeholder="Account Name"/>
+  </div>
+  <div class="topbar-group">
+    <span style="font-size:11px;color:var(--text2)">POESESSID</span>
+    <input id="sessid" type="password" value="881f40e3cb926dbeb73221ba30075b6d" placeholder="POESESSID"/>
+  </div>
+  <div class="topbar-group">
+    <span style="font-size:11px;color:var(--text2)">League</span>
+    <select id="league">
+      <option value="Mirage" selected>Mirage</option>
+      <option value="Hardcore Mirage">HC Mirage</option>
+      <option value="Standard">Standard</option>
+      <option value="Hardcore">Hardcore</option>
+    </select>
+  </div>
+  <button class="btn btn-primary" onclick="init()">โหลด Tabs</button>
+  <span id="ninjaBadge" class="ninja-status loading">poe.ninja: —</span>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-title">Tracked Tabs</div>
+    <div id="tabList"><div style="padding:20px 14px;color:var(--text3);font-size:12px">กด "โหลด Tabs" ก่อน</div></div>
+    <div class="sidebar-actions" id="sidebarActions" style="display:none">
+      <button class="btn btn-ghost" onclick="selectAll(true)" style="font-size:11px;padding:4px">ทั้งหมด</button>
+      <button class="btn btn-ghost" onclick="selectAll(false)" style="font-size:11px;padding:4px">ล้าง</button>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- WEALTH HEADER -->
+    <div class="wealth-header" id="wealthHeader" style="display:none">
+      <div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:2px">Total Wealth</div>
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <span class="wealth-value" id="wealthVal">0<span class="unit">c</span></span>
+          <span id="wealthDiv" style="color:var(--gold);font-size:14px"></span>
+        </div>
+      </div>
+      <div class="wealth-breakdown" id="breakdownList"></div>
+    </div>
+
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input id="search" type="text" placeholder="Search (ชื่อไอเทม…)" oninput="renderTable()"/>
+      </div>
+      <select class="filter-select" id="filterRarity" onchange="renderTable()">
+        <option value="">All Rarity</option>
+        <option value="Normal">Normal</option>
+        <option value="Magic">Magic</option>
+        <option value="Rare">Rare</option>
+        <option value="Unique">Unique</option>
+        <option value="Gem">Gem</option>
+        <option value="Currency">Currency</option>
+        <option value="Divination">Divination</option>
+      </select>
+      <select class="filter-select" id="filterPrice" onchange="renderTable()">
+        <option value="">All Price</option>
+        <option value="yes">มีราคา</option>
+        <option value="no">ไม่มีราคา</option>
+      </select>
+      <div class="total-badge" id="selectedTotal" style="display:none">Selected total: <span>0c</span></div>
+      <div class="toolbar-right">
+        <span class="sync-info" id="syncInfo"></span>
+        <button class="btn-load" id="btnLoad" onclick="loadSelected()" style="display:none" disabled>⚔ Load Items</button>
+        <button class="btn btn-ghost" onclick="exportCSV()" id="btnExport" style="display:none">⬇ CSV</button>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="table-container" id="tableContainer">
+      <div class="empty"><div class="ico">🗡️</div><p>โหลด Tabs แล้วเลือก tab ที่ต้องการ</p></div>
+    </div>
+
+    <!-- STATUS BAR -->
+    <div class="statusbar" id="statusBar">
+      <span id="statusText">พร้อมใช้งาน</span>
+      <div class="progress" id="progressWrap" style="display:none"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── STATE ──
+let allItems    = [];
+let ninjaMap    = {};   // name.lower → { chaosValue, icon, source }
+let stashItems  = {};   // detailsId  → { chaosValue, icon, name, variant, links, ... }
+let stashNames  = {};   // name.lower → [ entries ] sorted by chaosValue desc
+let clusterMap  = {};   // detailsId  → ClusterJewel entry
+let tabsData    = [];
+let checkedTabs = new Set();
+let sortKey     = 'totalChaos';
+let sortDir     = -1;
+let divinePrice = 1;
+
+const TAB_ICONS = {
+  CurrencyStash:'💰', MapStash:'🗺️', GemStash:'💎', DivinationStash:'🃏',
+  EssenceStash:'🧿', FragmentStash:'🔮', DelveStash:'⛏️', BlightStash:'🌿',
+  UltimatumStash:'⚡', DeliriumStash:'🌀', PremiumStash:'📦', NormalStash:'📦',
+  UniqueStash:'⭐', FlaskStash:'⚗️', MetamorphStash:'🧬', HeistStash:'🗝️',
+};
+function tabIcon(type){ return TAB_ICONS[type] || '📦'; }
+
+// ── INIT ──
+async function init(){
+  const account = v('account'), sessid = v('sessid'), league = v('league');
+  if(!account||!sessid){setStatus('กรุณากรอก Account และ POESESSID','error');return;}
+  setStatus('กำลังโหลด Stash Tabs…','');
+  loadNinjaPrices(league);
+  try{
+    const res = await fetch(`/api/tabs?accountName=${enc(account)}&league=${enc(league)}&sessid=${enc(sessid)}`);
+    let data; try{data=await res.json();}catch{throw new Error('ไม่สามารถเชื่อมต่อ server.js');}
+    if(!res.ok) throw new Error(data.error||`HTTP ${res.status}`);
+    if(!data.tabs?.length) throw new Error('ไม่พบ Stash Tab');
+    tabsData = data.tabs;
+    renderSidebar();
+    document.getElementById('sidebarActions').style.display='flex';
+    document.getElementById('btnLoad').style.display='block';
+    setStatus(`พบ ${data.tabs.length} tabs — เลือก tab แล้วกด Load Items`,'success');
+  }catch(e){setStatus(`⚠ ${e.message}`,'error');}
+}
+
+// ── SIDEBAR ──
+function renderSidebar(){
+  const list = document.getElementById('tabList');
+  list.innerHTML = tabsData.map((tab,i)=>{
+    const checked = checkedTabs.has(i);
+    const icon = tabIcon(tab.type);
+    const col = tab.colour ? `color:rgb(${tab.colour.r||200},${tab.colour.g||200},${tab.colour.b||200})` : '';
+    return `<div class="tab-item ${checked?'checked':''}" onclick="toggleTab(${i})" data-idx="${i}">
+      <span class="tab-icon" style="${col}">${icon}</span>
+      <span class="tab-name">${escHtml(tab.n)}</span>
+      <div class="cb"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    </div>`;
+  }).join('');
+}
+
+function toggleTab(i){
+  if(checkedTabs.has(i)) checkedTabs.delete(i);
+  else checkedTabs.add(i);
+  document.getElementById('btnLoad').disabled = checkedTabs.size===0;
+  renderSidebar();
+}
+function selectAll(val){
+  if(val) tabsData.forEach((_,i)=>checkedTabs.add(i));
+  else checkedTabs.clear();
+  document.getElementById('btnLoad').disabled = checkedTabs.size===0;
+  renderSidebar();
+}
+
+// ── LOAD ITEMS ──
+async function loadSelected(){
+  const account=v('account'),sessid=v('sessid'),league=v('league');
+  if(!account||!sessid){setStatus('กรุณากรอก Account และ POESESSID','error');return;}
+  const selected = [...checkedTabs].sort((a,b)=>a-b);
+  if(!selected.length){setStatus('เลือก tab ก่อน','error');return;}
+
+  const btn=document.getElementById('btnLoad');
+  btn.disabled=true;
+  document.getElementById('progressWrap').style.display='block';
+  document.getElementById('tableContainer').innerHTML='';
+
+  let combined=[];
+  for(let i=0;i<selected.length;i++){
+    const idx=selected[i];
+    const tab=tabsData[idx];
+    setStatus(`โหลด: ${tab.n} (${i+1}/${selected.length})…`,'');
+    setProgress((i/selected.length)*100);
+    try{
+      const res=await fetch(`/api/stash?accountName=${enc(account)}&league=${enc(league)}&tabIndex=${idx}&sessid=${enc(sessid)}`);
+      let data; try{data=await res.json();}catch{throw new Error('ไม่สามารถเชื่อมต่อ server.js');}
+      if(!res.ok) throw new Error(data.error||`HTTP ${res.status}`);
+      if(data.items) data.items.forEach(it=>{it._tabName=tab.n;it._tabType=tab.type;});
+      combined=combined.concat(data.items||[]);
+    }catch(e){
+      setStatus(`⚠ ${e.message}`,'error');
+      btn.disabled=false; setProgress(0);
+      document.getElementById('progressWrap').style.display='none'; return;
+    }
+    if(i<selected.length-1) await sleep(300);
+  }
+  setProgress(100);
+  setTimeout(()=>{document.getElementById('progressWrap').style.display='none';setProgress(0);},500);
+
+  processItems(combined);
+  const now=new Date(); document.getElementById('syncInfo').textContent=`Synced ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+  setStatus(`โหลดสำเร็จ — ${combined.length} items จาก ${selected.length} tab`,'success');
+  btn.disabled=false;
+  document.getElementById('btnExport').style.display='block';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRICE MATCHING
+// ─────────────────────────────────────────────────────────────────────────────
+
+function nameToSlug(name){
+  return name.toLowerCase().replace(/'/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+}
+
+// Count sockets in a stash item
+function countLinks(it){
+  if(!it.sockets || !it.sockets.length) return 0;
+  // Find largest group
+  const groups = {};
+  it.sockets.forEach(s=>{
+    const g = s.group||0;
+    groups[g] = (groups[g]||0)+1;
+  });
+  return Math.max(...Object.values(groups));
+}
+
+// ── Cluster Jewel matching ─────────────────────────────────────────────────
+// From stash item: enchantMods[0] = stat text, levelRequired, hybrid/passives count
+function getClusterJewelPrice(it){
+  // Cluster jewels have enchant mods (the notable enchant)
+  const enchant = (it.enchantMods && it.enchantMods[0]) || '';
+  if(!enchant) return null;
+
+  // Get passives count from properties or hybrid typeLine
+  // properties: [{name:"Adds # Passive Skills", values:[["3",0]]}]
+  let passives = 0;
+  (it.properties||[]).forEach(p=>{
+    if(p.name && p.name.includes('Passive')) {
+      passives = parseInt((p.values&&p.values[0]&&p.values[0][0])||'0')||0;
+    }
+  });
+
+  const ilvl = it.ilvl || it.levelRequired || 0;
+  const base = (it.typeLine||'').replace(/<<[^>]*>>/g,'').trim(); // "Small Cluster Jewel"
+
+  // Build detailsId like poe.ninja: "stat-slug-N-passives-ilvl"
+  const statSlug = nameToSlug(enchant);
+  const detailsId = `${statSlug}-${passives}-passives-${ilvl}`;
+
+  const entry = clusterMap[detailsId];
+  if(entry) {
+    return {
+      chaosValue: entry.chaosValue,
+      icon: entry.icon,
+      source: 'cluster',
+      displayName: `${enchant} ilv${ilvl} ${passives} passives`,
+      base,
+    };
+  }
+
+  // Fallback: match by enchant+passives ignoring ilvl
+  const fallback = Object.values(clusterMap).find(e =>
+    e.passives === passives &&
+    nameToSlug(e.name) === statSlug
+  );
+  if(fallback) {
+    return {
+      chaosValue: fallback.chaosValue,
+      icon: fallback.icon,
+      source: 'cluster-approx',
+      displayName: `${enchant} ilv${ilvl} ${passives} passives`,
+      base,
+    };
+  }
+  return null;
+}
+
+// ── Unique / Gem stash matching ───────────────────────────────────────────
+// stash API: name, links (via sockets), variant (Foulborn mutation text), corrupted
+function getStashItemPrice(it, rawName, rawType){
+  const nameKey = rawName.toLowerCase();
+  const entries = stashNames[nameKey];
+  if(!entries || !entries.length) return null;
+
+  const links = countLinks(it);
+  const isFoulborn = it.isMirrored === false && it.frameType === 3 && (it.mutatedMods||[]).length > 0
+                  || (it.name||'').startsWith('Foulborn ');
+
+  // Score each entry — pick best match
+  function score(e){
+    let s = 0;
+    // Links match
+    if(e.links) {
+      if(links === e.links) s += 100;
+      else return -1; // wrong link tier = discard
+    } else {
+      if(links >= 5) return -1; // entry has no links but item is linked
+    }
+    // Foulborn
+    if(e.isFoulborn === isFoulborn) s += 50;
+    // Variant match (for Foulborn: mutatedMods)
+    if(e.variant && it.explicitMods) {
+      const varLower = e.variant.toLowerCase();
+      const modsLower = (it.explicitMods||[]).map(m=>m.toLowerCase());
+      if(modsLower.some(m=>m.includes(varLower)) || varLower.includes(modsLower[0]||'')) s += 30;
+    }
+    return s;
+  }
+
+  const scored = entries.map(e=>({e, s:score(e)})).filter(x=>x.s>=0).sort((a,b)=>b.s-a.s);
+  if(!scored.length) return null;
+  const best = scored[0].e;
+  return { chaosValue: best.chaosValue, icon: best.icon, source: best.source };
+}
+
+// ── Gem matching ───────────────────────────────────────────────────────────
+function getGemPrice(it, rawType){
+  const nameKey = rawType.toLowerCase();
+  const entries = stashNames[nameKey];
+  if(!entries || !entries.length) return null;
+
+  // Gem properties: quality, level, corrupted
+  let gemLevel = 1, quality = 0;
+  (it.properties||[]).forEach(p=>{
+    if(p.name==='Level')    gemLevel = parseInt((p.values&&p.values[0]&&p.values[0][0])||'1')||1;
+    if(p.name==='Quality')  quality  = parseInt(((p.values&&p.values[0]&&p.values[0][0])||'').replace('%',''))||0;
+  });
+  const corrupted = it.corrupted || false;
+
+  // variant format: "20/20" "21/20c" "1/0" etc. (level/quality + c for corrupted)
+  function matchScore(e){
+    if(!e.variant) return 10; // no variant preference, generic match
+    const v = e.variant; // e.g. "20/20c" "21" "20c"
+    const hasC = v.endsWith('c');
+    const parts = v.replace(/c$/,'').split('/');
+    const vLevel = parseInt(parts[0])||0;
+    const vQual  = parseInt(parts[1])||0;
+    if(hasC !== corrupted) return -1; // corrupted mismatch
+    let s = 0;
+    if(vLevel === gemLevel) s += 50;
+    if(vQual  === quality)  s += 30;
+    return s;
+  }
+
+  const scored = entries.map(e=>({e,s:matchScore(e)})).filter(x=>x.s>=0).sort((a,b)=>b.s-a.s);
+  if(!scored.length) return null;
+  return { chaosValue: scored[0].e.chaosValue, icon: scored[0].e.icon, source: scored[0].e.source };
+}
+
+// ── Inscribed Ultimatum parsing ────────────────────────────────────────────
+// descriptionText: "Requires Sacrifice: X\nReward: Y"
+// We display reward label and price reward item's base price × qty
+function parseUltimatum(it){
+  const desc = it.descriptionText || (it.properties||[]).map(p=>p.name+': '+(p.values||[]).map(v=>v[0]).join('')).join('\n');
+  if(!desc) return null;
+
+  // Extract sacrifice and reward
+  const sacMatch   = desc.match(/Sacrifice:\s*(.+?)(?:\n|Reward|$)/i);
+  const rewMatch   = desc.match(/Reward:\s*(.+?)(?:\n|$)/i);
+  if(!sacMatch || !rewMatch) return null;
+
+  const sacrifice = sacMatch[1].trim();
+  const reward    = rewMatch[1].trim();
+
+  // Parse "ItemName xN" or "ItemName x N"
+  const qtyMatch = sacrifice.match(/^(.+?)\s*[xX×]\s*(\d+)$/);
+  const sacItem  = qtyMatch ? qtyMatch[1].trim() : sacrifice;
+  const sacQty   = qtyMatch ? parseInt(qtyMatch[2]) : 1;
+
+  // Reward category detection
+  const rewardIsDouble = reward.toLowerCase().includes('doubles');
+  let displayName = '';
+  let priceKey    = '';
+
+  if(reward.toLowerCase().includes('divination')) {
+    // Divination card reward
+    const cardMatch = sacrifice.match(/^(.+?)\s*[xX×]\s*(\d+)$/);
+    displayName = cardMatch ? `${cardMatch[1]} x${cardMatch[2]}` : sacrifice;
+    priceKey    = cardMatch ? cardMatch[1].trim() : sacrifice;
+  } else if(rewardIsDouble) {
+    // Doubles currency → reward = sacItem × sacQty × 2
+    displayName = `${sacItem} x${sacQty} (×2)`;
+    priceKey    = sacItem;
+  } else {
+    // Unique item reward
+    displayName = reward;
+    priceKey    = reward;
+  }
+
+  return { displayName, priceKey, sacItem, sacQty, rewardIsDouble };
+}
+
+// ── Master price lookup ───────────────────────────────────────────────────
+function getPriceForItem(it){
+  const rawName = (it.name||'').replace(/<<[^>]*>>/g,'').trim();
+  const rawType = (it.typeLine||'').replace(/<<[^>]*>>/g,'').trim();
+  const rarity  = getRarity(it);
+
+  // 1. Inscribed Ultimatum
+  if(rawType === 'Inscribed Ultimatum' || rawName === 'Inscribed Ultimatum'){
+    const parsed = parseUltimatum(it);
+    if(parsed){
+      const bp = ninjaMap[parsed.priceKey.toLowerCase()];
+      if(bp) {
+        let multiplier = parsed.rewardIsDouble ? parsed.sacQty * 2 : 1;
+        return {
+          chaosValue: bp.chaosValue * multiplier,
+          icon: bp.icon,
+          source: 'ultimatum',
+          displayLabel: parsed.displayName,
+        };
+      }
+    }
+    // fallback: no price
+    return null;
+  }
+
+  // 2. Cluster Jewels (magic frameType=1 with enchantMods + typeLine contains "Cluster Jewel")
+  if(rawType.includes('Cluster Jewel')){
+    const cp = getClusterJewelPrice(it);
+    if(cp) return cp;
+    // fallback to generic cluster jewel price
+    return ninjaMap[rawType.toLowerCase()] || null;
+  }
+
+  // 3. Skill Gems — use stash variant matching
+  if(rarity === 'Gem'){
+    const gp = getGemPrice(it, rawType);
+    if(gp) return gp;
+    return ninjaMap[rawType.toLowerCase()] || null;
+  }
+
+  // 4. Unique items — use stash variant matching (handles links/Foulborn)
+  if(rarity === 'Unique' && rawName){
+    const up = getStashItemPrice(it, rawName, rawType);
+    if(up) return up;
+    // fallback to simple name lookup
+    return ninjaMap[rawName.toLowerCase()] || null;
+  }
+
+  // 5. Currency / Fragment / Normal items — use exchange-first ninjaMap
+  return ninjaMap[rawType.toLowerCase()] || ninjaMap[rawName.toLowerCase()] || null;
+}
+
+// ── PROCESS ──────────────────────────────────────────────────────────────────
+function processItems(items){
+  // Group stackable currency (same name, same tab)
+  // Do NOT group unique/gem/cluster — each is unique instance
+  const groupMap = {};
+  items.forEach(it => {
+    const rawName = (it.name||'').replace(/<<[^>]*>>/g,'').trim();
+    const rawType = (it.typeLine||'').replace(/<<[^>]*>>/g,'').trim();
+    const rarity  = getRarity(it);
+    const stackable = (rarity === 'Currency' || rarity === 'Divination' || rarity === 'Normal');
+    const displayName = rawName || rawType;
+    // Only group if stackable and identical
+    const gKey = stackable
+      ? `${displayName.toLowerCase()}||${it._tabName||''}`
+      : `__nogroup__${Math.random()}`; // never group
+    if(stackable && groupMap[gKey]){
+      groupMap[gKey].stackSize = (groupMap[gKey].stackSize||1) + (it.stackSize||1);
+    } else {
+      groupMap[gKey] = { ...it, stackSize: it.stackSize||1 };
+    }
+  });
+  items = Object.values(groupMap);
+
+  let missCount = 0;
+  allItems = items.map(it => {
+    const rawName = (it.name||'').replace(/<<[^>]*>>/g,'').trim();
+    const rawType = (it.typeLine||'').replace(/<<[^>]*>>/g,'').trim();
+    const displayName = rawName || rawType;
+    const rarity  = getRarity(it);
+    const qty     = it.stackSize || 1;
+
+    // Base type display
+    let base = (rawName && rawName !== rawType) ? rawType : '';
+
+    // Cluster Jewel: show enchant as name, base as jewel type
+    let displayLabel = null;
+
+    const pd = getPriceForItem(it);
+    if(pd && pd.displayLabel) displayLabel = pd.displayLabel;
+
+    if(!pd){ missCount++; if(missCount<=15) console.log('[no price]', rawName||'—', '|', rawType); }
+
+    // For Cluster Jewels, override display name
+    let finalName = displayName;
+    if(rawType.includes('Cluster Jewel') && pd && pd.displayName){
+      finalName = pd.displayName;
+      base = rawType;
+    }
+
+    const links = countLinks(it);
+
+    const chaosEach  = pd ? pd.chaosValue : null;
+    const totalChaos = chaosEach !== null ? chaosEach * qty : null;
+    return {
+      name: finalName,
+      base,
+      typeLine: rawType,
+      qty,
+      rarity,
+      tab: it._tabName || '',
+      chaosEach,
+      totalChaos,
+      icon: pd?.icon || null,
+      links,
+      corrupted: it.corrupted || false,
+    };
+  });
+
+  if(missCount) console.log(`[no price] ${missCount}/${items.length} items`);
+  renderTable();
+  updateWealth();
+  document.getElementById('wealthHeader').style.display='flex';
+}
+
+function updateWealth(){
+  const total = allItems.reduce((s,it)=>s+(it.totalChaos||0),0);
+  const div = divinePrice>1 ? (total/divinePrice).toFixed(1) : null;
+  document.getElementById('wealthVal').innerHTML = `${Math.round(total).toLocaleString()}<span class="unit">c</span>`;
+  document.getElementById('wealthDiv').textContent = div ? `≈ ${div}d` : '';
+
+  const sorted=[...allItems].filter(it=>it.totalChaos>0).sort((a,b)=>b.totalChaos-a.totalChaos).slice(0,8);
+  document.getElementById('breakdownList').innerHTML = sorted.map(it=>`
+    <div class="breakdown-item">
+      ${it.icon?`<img src="${escHtml(it.icon)}" alt=""/>`:''}
+      <span style="font-size:11px;color:var(--text2);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(it.name)}</span>
+      <span class="breakdown-val">${formatChaos(it.totalChaos)}</span>
+    </div>`).join('');
+}
+
+// ── RENDER TABLE ──
+function renderTable(){
+  const search=(document.getElementById('search')?.value||'').toLowerCase();
+  const fRarity=document.getElementById('filterRarity')?.value||'';
+  const fPrice=document.getElementById('filterPrice')?.value||'';
+
+  let filtered=allItems.filter(it=>{
+    const mn=it.name.toLowerCase().includes(search)||it.typeLine.toLowerCase().includes(search)||it.base.toLowerCase().includes(search);
+    const mr=!fRarity||it.rarity===fRarity;
+    const mp=!fPrice||(fPrice==='yes'?it.chaosEach!==null:it.chaosEach===null);
+    return mn&&mr&&mp;
+  });
+  filtered.sort((a,b)=>{
+    let va=a[sortKey],vb=b[sortKey];
+    if(['qty','chaosEach','totalChaos'].includes(sortKey)){va=va===null?-Infinity:+va;vb=vb===null?-Infinity:+vb;}
+    if(va<vb)return -sortDir;if(va>vb)return sortDir;return 0;
+  });
+
+  const totalChaos=filtered.reduce((s,it)=>s+(it.totalChaos||0),0);
+  const totalBadge=document.getElementById('selectedTotal');
+  totalBadge.style.display='block';
+  totalBadge.innerHTML=`Selected total: <span>${formatChaos(totalChaos)}</span>`;
+
+  if(!filtered.length){
+    document.getElementById('tableContainer').innerHTML=`<div class="empty"><div class="ico">🔍</div><p>ไม่พบไอเทมที่ตรงกับเงื่อนไข</p></div>`;
+    return;
+  }
+
+  const col=(key,label,cls='')=>{
+    const a=sortKey===key?'sorted':'';
+    const ic=sortKey===key?(sortDir===1?'▲':'▼'):'⇅';
+    return `<th class="${a} ${cls}" onclick="doSort('${key}')">${label} <span class="sort-icon">${ic}</span></th>`;
+  };
+
+  const rows=filtered.map(it=>{
+    // Link badge
+    const linkBadge = it.links >= 5 ? `<span style="font-size:10px;color:${it.links===6?'#e8d890':'#aaa'};margin-left:4px">${it.links}L</span>` : '';
+    const corruptBadge = it.corrupted ? `<span style="font-size:10px;color:#e57373;margin-left:3px">C</span>` : '';
+    return `
+    <tr>
+      <td class="icon-cell">${it.icon?`<img src="${escHtml(it.icon)}" loading="lazy" alt=""/>`:'<div style="width:28px;height:28px;background:var(--bg3);border-radius:2px"></div>'}</td>
+      <td class="name-cell">
+        <div class="name-wrap r-${it.rarity}">
+          <span class="rarity-dot"></span>
+          <div>
+            <div class="item-name">${escHtml(it.name||it.typeLine)}${linkBadge}${corruptBadge}</div>
+            ${it.base?`<div class="item-base">${escHtml(it.base)}</div>`:''}
+          </div>
+        </div>
+      </td>
+      <td class="tab-cell">${escHtml(it.tab)}</td>
+      <td class="num qty-cell">${it.qty.toLocaleString()}</td>
+      <td class="num ${it.chaosEach!==null?'price-cell':'no-price'}">${it.chaosEach!==null?formatChaosSmall(it.chaosEach)+'c':'—'}</td>
+      <td class="num ${it.totalChaos!==null?'total-cell':'no-price'}">${it.totalChaos!==null?(formatChaos(it.totalChaos)+(divinePrice>1?' <span style="color:var(--text2);font-size:11px">('+( it.totalChaos/divinePrice).toFixed(1)+'d)</span>':'')):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('tableContainer').innerHTML=`
+    <table>
+      <thead><tr>
+        <th style="width:44px"></th>
+        ${col('name','Name')}
+        <th>Tab</th>
+        ${col('qty','Quantity','num')}
+        ${col('chaosEach','Price','num')}
+        ${col('totalChaos','Total','num')}
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function doSort(key){
+  if(sortKey===key)sortDir*=-1;else{sortKey=key;sortDir=['qty','chaosEach','totalChaos'].includes(key)?-1:1;}
+  renderTable();
+}
+
+// ── NINJA ──
+async function loadNinjaPrices(league){
+  setBadge('loading','⏳ poe.ninja…');
+  try{
+    const res=await fetch(`/api/ninja-prices?league=${enc(league)}`);
+    if(!res.ok)throw new Error(`HTTP ${res.status}`);
+    const data=await res.json();
+    ninjaMap    = data.prices    || {};
+    stashItems  = data.stashItems|| {};
+    stashNames  = data.stashNames|| {};
+    clusterMap  = data.clusterMap|| {};
+    divinePrice = data.divinePrice || ninjaMap['divine orb']?.chaosValue || 1;
+    const cnt   = Object.keys(ninjaMap).length;
+    const sn    = Object.keys(stashItems).length;
+    setBadge('ok',`✓ poe.ninja ${cnt.toLocaleString()} + ${sn.toLocaleString()} variants · 1d=${Math.round(divinePrice)}c`);
+    if(allItems.length){renderTable();updateWealth();}
+  }catch(e){console.error(e);setBadge('error','✗ poe.ninja ล้มเหลว');}
+}
+
+function setBadge(s,t){
+  const b=document.getElementById('ninjaBadge');
+  b.textContent=t;
+  b.className='ninja-status'+(s==='ok'?'':s==='error'?' error':' loading');
+}
+
+// ── UTILS ──
+function getRarity(item){
+  const t=item.frameType;
+  if(t===0)return'Normal';if(t===1)return'Magic';if(t===2)return'Rare';
+  if(t===3)return'Unique';if(t===4)return'Gem';if(t===5)return'Currency';
+  if(t===6)return'Divination';return'Normal';
+}
+function formatChaos(v){
+  if(v===null||v===undefined)return'—';
+  if(v>=1000)return Math.round(v).toLocaleString()+'c';
+  if(v>=1)return v.toFixed(1)+'c';
+  return v.toFixed(2)+'c';
+}
+function formatChaosSmall(v){
+  if(v===null)return'—';
+  if(v>=100)return Math.round(v).toString();
+  if(v>=1)return v.toFixed(1);
+  return v.toFixed(3);
+}
+function v(id){return document.getElementById(id).value.trim();}
+function enc(s){return encodeURIComponent(s);}
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+function setProgress(p){document.getElementById('progressFill').style.width=p+'%';}
+function setStatus(msg,type){
+  const el=document.getElementById('statusText');
+  el.textContent=msg;
+  const bar=document.getElementById('statusBar');
+  bar.className='statusbar'+(type==='error'?' error':type==='success'?' success':'');
+}
+
+function exportCSV(){
+  if(!allItems.length)return;
+  const rows=[['Name','Base','Rarity','Quantity','Links','Corrupted','Price (Chaos)','Total (Chaos)','Tab']];
+  allItems.forEach(it=>rows.push([it.name,it.base,it.rarity,it.qty,it.links||0,it.corrupted?'Y':'',it.chaosEach??'',it.totalChaos!==null?it.totalChaos.toFixed(2):'',it.tab]));
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='poe_stash.csv';a.click();
+}
+</script>
+</body>
+</html>
