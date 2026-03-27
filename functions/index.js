@@ -147,20 +147,24 @@ app.get('/api/ninja-prices', async (req, res) => {
 
         if (exPrice != null) {
           // มีราคาจาก exchange overview → ใช้เลย
-          priceMap[key] = {
+          const entryEx = {
             chaosValue: exPrice,
             icon: iconByName[key] || iconByName[detailsId] || null,
             source: `ex-${type}`,
             detailsId,
           };
+          priceMap[key] = entryEx;
+          priceMap[key.replace(/'/g, '')] = entryEx; // key ไม่มี apostrophe
         } else if (line.chaosEquivalent && line.chaosEquivalent > 0) {
           // fallback chaosEquivalent แต่ mark ว่าอาจไม่แม่น
-          priceMap[key] = {
+          const entryOv = {
             chaosValue: line.chaosEquivalent,
             icon: iconByName[key] || iconByName[detailsId] || null,
             source: `ov-${type}`,
             detailsId,
           };
+          priceMap[key] = entryOv;
+          priceMap[key.replace(/'/g, '')] = entryOv;
           // ลองดึง details เพื่อ override ด้วยราคาที่แม่นกว่า
           if (detailsId) needDetails.push({ key, detailsId, type, iconFallback: iconByName[key] || iconByName[detailsId] || null });
         } else {
@@ -169,19 +173,36 @@ app.get('/api/ninja-prices', async (req, res) => {
         }
       });
 
-      // เพิ่ม exchange items ที่ไม่มีใน overview (slugToName)
+      // เพิ่ม exchange items ที่ไม่มีใน overview (slugToName + fetch details เพื่อได้ชื่อจริง)
       const mappedSlugs = new Set();
       (ovData.lines || []).forEach(l => {
         mappedSlugs.add(l.detailsId || '');
         mappedSlugs.add(nameToSlug(l.currencyTypeName || ''));
       });
+      const extraItems = [];
       (exData.lines || []).forEach(l => {
         if (!l.id || l.primaryValue == null || mappedSlugs.has(l.id)) return;
-        const key = slugToName(l.id).toLowerCase();
-        if (!priceMap[key]) {
-          priceMap[key] = { chaosValue: l.primaryValue, icon: iconByName[l.id] || null, source: `ex-extra-${type}`, detailsId: l.id };
-        }
+        extraItems.push(l);
       });
+      // fetch details เพื่อได้ชื่อจริงพร้อม apostrophe
+      for (let i = 0; i < extraItems.length; i += 5) {
+        const batch = extraItems.slice(i, i + 5);
+        await Promise.all(batch.map(async (l) => {
+          const d = await fetchExDetails(type, l.id);
+          const realName = d?.name || slugToName(l.id);
+          const key = realName.toLowerCase();
+          // เก็บทั้ง key จริงและ key ไม่มี apostrophe
+          const keyNoApos = key.replace(/'/g, '');
+          const entry = {
+            chaosValue: d?.chaosValue || l.primaryValue,
+            icon: d?.icon || iconByName[l.id] || null,
+            source: d ? `details-extra-${type}` : `ex-extra-${type}`,
+            detailsId: l.id,
+          };
+          if (!priceMap[key]) priceMap[key] = entry;
+          if (!priceMap[keyNoApos]) priceMap[keyNoApos] = entry;
+        }));
+      }
 
       // Chaos Orb hardcode
       if (!priceMap['chaos orb']) {

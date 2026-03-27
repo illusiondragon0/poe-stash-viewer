@@ -381,28 +381,38 @@ function countLinks(it){
 // ── Cluster Jewel matching ─────────────────────────────────────────────────
 // From stash item: enchantMods[0] = stat text, levelRequired, hybrid/passives count
 function getClusterJewelPrice(it){
-  // Cluster jewels have enchant mods (the notable enchant)
-  const enchant = (it.enchantMods && it.enchantMods[0]) || '';
+  // PoE stash API: Cluster Jewel enchant stat อยู่ใน implicitMods[0]
+  // ส่วน enchantMods มักว่างเปล่าสำหรับ cluster jewel
+  const enchant = (it.enchantMods && it.enchantMods[0])
+               || (it.implicitMods && it.implicitMods[0])
+               || '';
   if(!enchant) return null;
 
-  // Get passives count from properties or hybrid typeLine
-  // properties: [{name:"Adds # Passive Skills", values:[["3",0]]}]
+  // passives count: จาก properties "Adds # Passive Skills"
+  // หรือ implicitMods ที่มี "Adds X Passive Skills"
   let passives = 0;
   (it.properties||[]).forEach(p=>{
-    if(p.name && p.name.includes('Passive')) {
+    if(p.name && p.name.includes('Passive')){
       passives = parseInt((p.values&&p.values[0]&&p.values[0][0])||'0')||0;
     }
   });
+  if(!passives){
+    // ลอง parse จาก implicitMods เช่น "Adds 3 Passive Skills"
+    (it.implicitMods||[]).forEach(m=>{
+      const pm = m.match(/Adds\s+(\d+)\s+Passive/i);
+      if(pm) passives = parseInt(pm[1]);
+    });
+  }
 
-  const ilvl = it.ilvl || it.levelRequired || 0;
-  const base = (it.typeLine||'').replace(/<<[^>]*>>/g,'').trim(); // "Small Cluster Jewel"
+  const ilvl = it.ilvl || 0;
+  const base = (it.typeLine||'').replace(/<<[^>]*>>/g,'').trim();
 
-  // Build detailsId like poe.ninja: "stat-slug-N-passives-ilvl"
-  const statSlug = nameToSlug(enchant);
+  // poe.ninja detailsId format: "stat-slug-N-passives-ilvl"
+  const statSlug  = nameToSlug(enchant);
   const detailsId = `${statSlug}-${passives}-passives-${ilvl}`;
 
   const entry = clusterMap[detailsId];
-  if(entry) {
+  if(entry){
     return {
       chaosValue: entry.chaosValue,
       icon: entry.icon,
@@ -412,17 +422,30 @@ function getClusterJewelPrice(it){
     };
   }
 
-  // Fallback: match by enchant+passives ignoring ilvl
+  // Fallback: match enchant slug + passives count (ignore ilvl)
   const fallback = Object.values(clusterMap).find(e =>
-    e.passives === passives &&
-    nameToSlug(e.name) === statSlug
+    e.passives === passives && nameToSlug(e.name) === statSlug
   );
-  if(fallback) {
+  if(fallback){
     return {
       chaosValue: fallback.chaosValue,
       icon: fallback.icon,
       source: 'cluster-approx',
       displayName: `${enchant} ilv${ilvl} ${passives} passives`,
+      base,
+    };
+  }
+
+  // Last fallback: ลอง match ด้วย enchant slug อย่างเดียว (ไม่สนจำนวน passive)
+  const looseFallback = Object.values(clusterMap).find(e =>
+    nameToSlug(e.name) === statSlug
+  );
+  if(looseFallback){
+    return {
+      chaosValue: looseFallback.chaosValue,
+      icon: looseFallback.icon,
+      source: 'cluster-loose',
+      displayName: `${enchant} ilv${ilvl} ${passives||'?'} passives`,
       base,
     };
   }
@@ -502,46 +525,85 @@ function getGemPrice(it, rawType){
 }
 
 // ── Inscribed Ultimatum parsing ────────────────────────────────────────────
-// descriptionText: "Requires Sacrifice: X\nReward: Y"
-// We display reward label and price reward item's base price × qty
+// PoE stash API เก็บ Ultimatum info ใน:
+//   properties: [{name:"Requires Sacrifice", values:[["Divine Orb x8",0]]},
+//                {name:"Reward", values:[["Doubles sacrificed Currency",0]]}]
+// หรือบาง version อยู่ใน additionalProperties, explicitMods, หรือ descriptionText
 function parseUltimatum(it){
-  const desc = it.descriptionText || (it.properties||[]).map(p=>p.name+': '+(p.values||[]).map(v=>v[0]).join('')).join('\n');
-  if(!desc) return null;
+  // รวมทุก source ที่เป็นไปได้
+  const props = {};
+  // จาก properties array
+  (it.properties||[]).forEach(p => {
+    if(p.name && p.values && p.values[0]) {
+      props[p.name.toLowerCase()] = p.values[0][0] || '';
+    }
+  });
+  // จาก additionalProperties (บาง version)
+  (it.additionalProperties||[]).forEach(p => {
+    if(p.name && p.values && p.values[0]) {
+      props[p.name.toLowerCase()] = p.values[0][0] || '';
+    }
+  });
 
-  // Extract sacrifice and reward
-  const sacMatch   = desc.match(/Sacrifice:\s*(.+?)(?:\n|Reward|$)/i);
-  const rewMatch   = desc.match(/Reward:\s*(.+?)(?:\n|$)/i);
-  if(!sacMatch || !rewMatch) return null;
+  // หา sacrifice และ reward
+  let sacrifice = props['requires sacrifice'] || props['sacrifice'] || '';
+  let reward    = props['reward'] || props['rewards'] || '';
 
-  const sacrifice = sacMatch[1].trim();
-  const reward    = rewMatch[1].trim();
+  // fallback: descriptionText
+  if(!sacrifice || !reward) {
+    const desc = it.descriptionText || '';
+    if(desc) {
+      const sm = desc.match(/Sacrifice[:\s]+(.+?)(?:
+|Reward|$)/i);
+      const rm = desc.match(/Reward[:\s]+(.+?)(?:
+|$)/i);
+      if(sm) sacrifice = sm[1].trim();
+      if(rm) reward    = rm[1].trim();
+    }
+  }
 
-  // Parse "ItemName xN" or "ItemName x N"
+  // fallback: explicitMods
+  if(!sacrifice || !reward) {
+    (it.explicitMods||[]).forEach(m => {
+      if(/sacrifice/i.test(m)) sacrifice = m.replace(/.*Sacrifice[:\s]*/i,'').trim();
+      if(/reward/i.test(m))    reward    = m.replace(/.*Reward[:\s]*/i,'').trim();
+    });
+  }
+
+  if(!sacrifice && !reward) return null;
+
+  // Parse quantity จาก sacrifice เช่น "Divine Orb x8" หรือ "The Primordial x3"
   const qtyMatch = sacrifice.match(/^(.+?)\s*[xX×]\s*(\d+)$/);
-  const sacItem  = qtyMatch ? qtyMatch[1].trim() : sacrifice;
+  const sacItem  = qtyMatch ? qtyMatch[1].trim() : sacrifice.trim();
   const sacQty   = qtyMatch ? parseInt(qtyMatch[2]) : 1;
 
   // Reward category detection
-  const rewardIsDouble = reward.toLowerCase().includes('doubles');
+  const rewardLower    = reward.toLowerCase();
+  const rewardIsDouble = rewardLower.includes('doubles');
+  const rewardIsDivCard = rewardLower.includes('divination');
+
   let displayName = '';
   let priceKey    = '';
+  let rewardQty   = 1;
 
-  if(reward.toLowerCase().includes('divination')) {
-    // Divination card reward
-    const cardMatch = sacrifice.match(/^(.+?)\s*[xX×]\s*(\d+)$/);
-    displayName = cardMatch ? `${cardMatch[1]} x${cardMatch[2]}` : sacrifice;
-    priceKey    = cardMatch ? cardMatch[1].trim() : sacrifice;
-  } else if(rewardIsDouble) {
-    // Doubles currency → reward = sacItem × sacQty × 2
-    displayName = `${sacItem} x${sacQty} (×2)`;
+  if(rewardIsDivCard) {
+    // Divination Cards: sacrifice = "The Primordial x3"
+    displayName = qtyMatch ? `${sacItem} x${sacQty}` : sacItem;
     priceKey    = sacItem;
+    rewardQty   = sacQty; // ได้การ์ดคืน sacQty ใบ
+  } else if(rewardIsDouble) {
+    // Currency doubles: ได้ sacItem x sacQty x 2
+    displayName = `${sacItem} x${sacQty * 2}`;
+    priceKey    = sacItem;
+    rewardQty   = sacQty * 2;
   } else {
-    // Unique item reward
-    displayName = reward;
-    priceKey    = reward;
+    // Unique item หรืออื่นๆ: reward คือชื่อ item ที่ได้
+    displayName = reward.trim();
+    priceKey    = reward.trim();
+    rewardQty   = 1;
   }
 
-  return { displayName, priceKey, sacItem, sacQty, rewardIsDouble };
+  return { displayName, priceKey, sacItem, sacQty, rewardQty, rewardIsDouble, rewardIsDivCard };
 }
 
 // ── Master price lookup ───────────────────────────────────────────────────
@@ -554,11 +616,13 @@ function getPriceForItem(it){
   if(rawType === 'Inscribed Ultimatum' || rawName === 'Inscribed Ultimatum'){
     const parsed = parseUltimatum(it);
     if(parsed){
-      const bp = ninjaMap[parsed.priceKey.toLowerCase()];
+      const priceKeyLower   = parsed.priceKey.toLowerCase();
+      const priceKeyNoApos  = priceKeyLower.replace(/'/g, '');
+      const bp = ninjaMap[priceKeyLower] || ninjaMap[priceKeyNoApos]
+              || stashNames[priceKeyLower]?.[0] || stashNames[priceKeyNoApos]?.[0];
       if(bp) {
-        let multiplier = parsed.rewardIsDouble ? parsed.sacQty * 2 : 1;
         return {
-          chaosValue: bp.chaosValue * multiplier,
+          chaosValue: (bp.chaosValue || bp.chaosValue) * parsed.rewardQty,
           icon: bp.icon,
           source: 'ultimatum',
           displayLabel: parsed.displayName,
@@ -593,7 +657,12 @@ function getPriceForItem(it){
   }
 
   // 5. Currency / Fragment / Normal items — use exchange-first ninjaMap
-  return ninjaMap[rawType.toLowerCase()] || ninjaMap[rawName.toLowerCase()] || null;
+  // ลอง key ทั้งแบบมี apostrophe (Rogue's Marker) และไม่มี (rogues marker)
+  const rtKey  = rawType.toLowerCase();
+  const rnKey  = rawName.toLowerCase();
+  const rtNoAp = rtKey.replace(/'/g, '');
+  const rnNoAp = rnKey.replace(/'/g, '');
+  return ninjaMap[rtKey] || ninjaMap[rnKey] || ninjaMap[rtNoAp] || ninjaMap[rnNoAp] || null;
 }
 
 // ── PROCESS ──────────────────────────────────────────────────────────────────
@@ -605,7 +674,10 @@ function processItems(items){
     const rawName = (it.name||'').replace(/<<[^>]*>>/g,'').trim();
     const rawType = (it.typeLine||'').replace(/<<[^>]*>>/g,'').trim();
     const rarity  = getRarity(it);
-    const stackable = (rarity === 'Currency' || rarity === 'Divination' || rarity === 'Normal');
+    const isUltimatum = rawType === 'Inscribed Ultimatum';
+    const isCluster   = rawType.includes('Cluster Jewel');
+    const stackable   = !isUltimatum && !isCluster &&
+      (rarity === 'Currency' || rarity === 'Divination' || rarity === 'Normal');
     const displayName = rawName || rawType;
     // Only group if stackable and identical
     const gKey = stackable
