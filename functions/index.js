@@ -72,7 +72,10 @@ app.get('/api/tabs', async (req, res) => {
 
 // ── /api/stash ─────────────────────────────────────────────────────────────
 app.get('/api/stash', async (req, res) => {
-  const { accountName, league, tabIndex, sessid } = req.query;
+  const accountName = req.query.account;
+const league = req.query.league;
+const tabIndex = req.query.tabIndex;
+const sessid = req.query.sessid;
   if (!accountName || !sessid) return res.status(400).json({ error: 'missing params' });
   const url = `https://www.pathofexile.com/character-window/get-stash-items`
     + `?accountName=${encodeURIComponent(accountName)}`
@@ -286,4 +289,4 @@ app.get('/api/ninja-prices', async (req, res) => {
 
 // แทน exports.api = onRequest(...)
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Ready on port ${PORT}`));
+exports.api = onRequest(app);
