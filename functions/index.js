@@ -1,12 +1,16 @@
 // Firebase Cloud Function — wraps the Express app from server.js
 // Deploy: firebase deploy --only functions
+const { onRequest } = require('firebase-functions/v2/https');
+const express = require('express');
 const cors = require('cors');
-app.use(cors());
+const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
+
 const { onRequest } = require('firebase-functions/v2/https');
 const express        = require('express');
 const fetch          = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
 
 const app = express();
+app.use(cors());
 
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
