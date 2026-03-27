@@ -5,15 +5,10 @@ const express = require('express');
 const cors = require('cors');
 const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
 
-const { onRequest } = require('firebase-functions/v2/https');
-const express        = require('express');
-const fetch          = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
-
 const app = express();
 app.use(cors());
 
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
@@ -34,6 +29,7 @@ const POE_HEADERS = (sessid) => ({
 
 // ── /api/tabs ──────────────────────────────────────────────────────────────
 app.get('/api/tabs', async (req, res) => {
+  console.log("QUERY:", req.query);
   try {
     const accountName = req.query.account;
     const POESESSID = req.query.sessid;
@@ -287,6 +283,4 @@ app.get('/api/ninja-prices', async (req, res) => {
   res.json({ prices: priceMap, stashItems: stashItemMap, stashNames: stashNameMap, clusterMap, divinePrice });
 });
 
-// แทน exports.api = onRequest(...)
-const PORT = process.env.PORT || 3000;
 exports.api = onRequest(app);
