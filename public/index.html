@@ -245,6 +245,10 @@ td.tab-cell{color:var(--text2);font-size:12px}
 </div>
 
 <script>
+  async function loadNinjaPrices(league){
+  setBadge('loading','⏳ กำลังปลุก server… (ครั้งแรกอาจช้า 30 วิ)');
+  // ... โค้ดเดิม
+}
   const API_BASE = 'https://poe-stash-api.onrender.com'; // ใส่ทีหลังหลัง deploy Railway
 // ── STATE ──
 let allItems    = [];
