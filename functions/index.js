@@ -316,9 +316,9 @@ app.get('/api/ninja-prices', async (req, res) => {
           source:       `stash-${type}`,
           isFoulborn:   (line.name || '').startsWith('Foulborn '),
           mutatedMods:  (line.mutatedModifiers || []).map(m => m.text),
-          corrupted:    line.corrupted || false,
-          gemLevel:     line.gemLevel  || null,
-          gemQuality:   line.gemQuality|| null,
+          corrupted:    line.corrupted  === true,
+          gemLevel:     line.gemLevel   != null ? line.gemLevel   : null,
+          gemQuality:   line.gemQuality != null ? line.gemQuality : null,
         };
         if (entry.detailsId) stashItemMap[entry.detailsId] = entry;
         const k = line.name.toLowerCase();

@@ -516,8 +516,15 @@ function getStashItemPrice(it, rawName, rawType){
 
 // ── Gem matching ด้วย gemLevel / gemQuality / corrupted ────────────────────
 function getGemPrice(it, rawType){
+  // ลอง key หลายแบบ:
+  // 1. ชื่อตรง เช่น "automation support"
+  // 2. ตัด " support" ออก เช่น "automation" (ninja บางตัวไม่มี support)
+  // 3. ตัด " support" แบบอื่นๆ
   const nameKey = rawType.toLowerCase();
-  const entries = stashNames[nameKey];
+  const nameKeyNoSupport = nameKey.replace(/ support$/, '').replace(/ gem$/, '');
+  const entries = stashNames[nameKey]
+               || stashNames[nameKeyNoSupport]
+               || null;
   if(!entries || !entries.length) return null;
 
   // อ่านค่าจาก stash item properties
@@ -538,21 +545,34 @@ function getGemPrice(it, rawType){
 
   // Parse level/quality จาก entry (ใช้ gemLevel/gemQuality ถ้ามี ไม่งั้น parse variant)
   function entryLQ(e){
-    if(e.gemLevel != null && e.gemQuality != null)
-      return { lv: e.gemLevel, q: e.gemQuality, c: e.corrupted || false };
+    // ninja stash API มี gemLevel / gemQuality โดยตรง (บางตัว gemQuality null)
+    const eC = e.corrupted || false;
+    if(e.gemLevel != null){
+      return { lv: e.gemLevel, q: e.gemQuality != null ? e.gemQuality : 0, c: eC };
+    }
+    // fallback: parse variant string
+    // รูปแบบที่พบ: "20/20" "21/23c" "21c" "20c" "1/0"
     if(!e.variant) return { lv: 1, q: 0, c: false };
-    const hasC = e.variant.endsWith('c') || e.variant.endsWith('C');
+    const hasC = /c$/i.test(e.variant);
     const v    = e.variant.replace(/c$/i,'').split('/');
-    return { lv: parseInt(v[0])||1, q: parseInt(v[1])||0, c: hasC };
+    const lv   = parseInt(v[0]) || 1;
+    const q    = v.length > 1 ? (parseInt(v[1]) || 0) : 0; // "21c" → q=0
+    return { lv, q, c: hasC };
   }
 
   function matchScore(e, strictCorrupt){
     const { lv, q, c } = entryLQ(e);
     if(strictCorrupt && c !== corrupted) return -1;
     let s = 0;
-    if(c === corrupted) s += 100; // bonus สำคัญมาก
+    if(c === corrupted) s += 100;
     if(lv === lookupLevel) s += 60;
-    if(q  === lookupQual)  s += 30;
+    // quality: ถ้า entry ไม่มี quality info (variant="21c") ไม่ penalize
+    const entryHasQual = e.gemQuality != null || (e.variant && e.variant.includes('/'));
+    if(entryHasQual){
+      if(q === lookupQual) s += 30;
+    } else {
+      s += 15; // partial bonus ถ้าไม่มี quality info
+    }
     return s;
   }
 
