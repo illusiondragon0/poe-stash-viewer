@@ -517,42 +517,42 @@ function getGemPrice(it, rawType){
   });
   const corrupted = it.corrupted || false;
 
-  // Normalize: level 1-19 → lookup 1, quality 1-19 → lookup 0
-  // เพราะ poe.ninja ไม่มีราคาสำหรับ gem level ต่ำ ใช้ level 1 แทน
+  // Normalize lookup key:
+  // level 1-19 → lookup level 1 (poe.ninja ไม่มีราคาสำหรับ level ต่ำ)
+  // quality 1-19 → lookup quality 0
   const lookupLevel = gemLevel >= 20 ? gemLevel : 1;
   const lookupQual  = gemQuality >= 20 ? gemQuality : 0;
 
-  function matchScore(e, allowCorruptMismatch){
-    const eCorrupted = e.corrupted || false;
-    // ถ้า allow mismatch = false ต้อง match; ถ้า true ยอมรับ mismatch
-    if(!allowCorruptMismatch && eCorrupted !== corrupted) return -1;
+  // Parse level/quality จาก entry (ใช้ gemLevel/gemQuality ถ้ามี ไม่งั้น parse variant)
+  function entryLQ(e){
+    if(e.gemLevel != null && e.gemQuality != null)
+      return { lv: e.gemLevel, q: e.gemQuality, c: e.corrupted || false };
+    if(!e.variant) return { lv: 1, q: 0, c: false };
+    const hasC = e.variant.endsWith('c') || e.variant.endsWith('C');
+    const v    = e.variant.replace(/c$/i,'').split('/');
+    return { lv: parseInt(v[0])||1, q: parseInt(v[1])||0, c: hasC };
+  }
 
+  function matchScore(e, strictCorrupt){
+    const { lv, q, c } = entryLQ(e);
+    if(strictCorrupt && c !== corrupted) return -1;
     let s = 0;
-    // match level
-    const eLevel = e.gemLevel != null ? e.gemLevel : (() => {
-      if(!e.variant) return 1;
-      return parseInt(e.variant.replace(/c$/i,'').split('/')[0]) || 1;
-    })();
-    const eQual = e.gemQuality != null ? e.gemQuality : (() => {
-      if(!e.variant) return 0;
-      return parseInt(e.variant.replace(/c$/i,'').split('/')[1]) || 0;
-    })();
-
-    if(eLevel === lookupLevel) s += 60;
-    if(eQual  === lookupQual)  s += 30;
+    if(c === corrupted) s += 100; // bonus สำคัญมาก
+    if(lv === lookupLevel) s += 60;
+    if(q  === lookupQual)  s += 30;
     return s;
   }
 
-  // Pass 1: strict corrupted match
+  // Pass 1: strict — corrupted ต้องตรง
   let scored = entries
-    .map(e=>({e, s:matchScore(e, false)}))
+    .map(e=>({e, s:matchScore(e, true)}))
     .filter(x=>x.s >= 0)
     .sort((a,b)=>b.s-a.s);
 
-  // Pass 2: ถ้า corrupted แต่หาไม่เจอ → ใช้ non-corrupted แทน (ราคาใกล้เคียง)
-  if(!scored.length && corrupted){
+  // Pass 2: ถ้าหาไม่เจอเลย → ยอมรับ corrupted mismatch (ราคาใกล้เคียง)
+  if(!scored.length){
     scored = entries
-      .map(e=>({e, s:matchScore(e, true)}))
+      .map(e=>({e, s:matchScore(e, false)}))
       .filter(x=>x.s >= 0)
       .sort((a,b)=>b.s-a.s);
   }
@@ -560,7 +560,7 @@ function getGemPrice(it, rawType){
   if(!scored.length) return null;
   const best = scored[0].e;
 
-  // displayLabel: "Name level/quality Corrupted" (โชว์ค่าจริง ไม่ใช่ lookup)
+  // โชว์ค่าจริง ไม่ใช่ lookup value
   const label = `${rawType} ${gemLevel}/${gemQuality}${corrupted?' Corrupted':''}`;
   return {
     chaosValue: best.chaosValue,
