@@ -785,7 +785,25 @@ function getPriceForItem(it){
     }
   }
 
-  // 4. Skill Gems — ใช้ baseType ก่อน (hybrid gem: typeLine=trigger, baseType=gem จริง)
+  // 4. Maps (normal/magic/rare/unique maps via stash overview)
+  {
+    const mapType = rawType.toLowerCase();
+    const fullName = (rawName || rawType).toLowerCase();
+    const isMap = mapType.includes('map');
+    if(isMap){
+      // ลอง match ด้วย full name ก่อน
+      const e1 = stashNames[fullName];
+      if(e1 && e1.length) return { chaosValue: e1[0].chaosValue, icon: e1[0].icon, source: e1[0].source };
+      // fallback: typeLine
+      const e2 = stashNames[mapType];
+      if(e2 && e2.length) return { chaosValue: e2[0].chaosValue, icon: e2[0].icon, source: e2[0].source };
+      // fallback: ninjaMap
+      const nm = ninjaMap[fullName] || ninjaMap[mapType];
+      if(nm) return nm;
+    }
+  }
+
+  // 5. Skill Gems — ใช้ baseType ก่อน (hybrid gem: typeLine=trigger, baseType=gem จริง)
   if(rarity === 'Gem'){
     const rawBase = (it.baseType||'').replace(/<<[^>]*>>/g,'').trim();
     const gemName = rawBase || rawType; // baseType มีค่าเสมอสำหรับ hybrid gems
