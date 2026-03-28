@@ -109,8 +109,8 @@ td.real-price-cell{padding:4px 8px}
 td.real-price-cell input{width:90px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:3px 6px;border-radius:3px;font-size:12px;outline:none;text-align:right}
 td.real-price-cell input:focus{border-color:var(--accent)}
 td.real-price-cell input.err{border-color:var(--red);color:var(--red)}
-td.calc-cell{color:#7ec8a0;font-size:12px;text-align:right;white-space:nowrap}
-td.calc-qty-cell{color:var(--text2);font-size:12px;text-align:right;white-space:nowrap}
+td.calc-cell{color:#7ec8a0;font-size:12px;text-align:right;white-space:nowrap;cursor:pointer}
+td.calc-qty-cell{color:var(--text2);font-size:12px;text-align:right;white-space:nowrap;cursor:pointer}
 td.tab-cell{color:var(--text2);font-size:12px}
 .rarity-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;flex-shrink:0}
 .name-wrap{display:flex;align-items:center}
@@ -251,10 +251,7 @@ td.tab-cell{color:var(--text2);font-size:12px}
 </div>
 
 <script>
-  async function loadNinjaPrices(league){
-  setBadge('loading','⏳ กำลังปลุก server… (ครั้งแรกอาจช้า 30 วิ)');
-  // ... โค้ดเดิม
-}
+  
   const API_BASE = 'https://poe-stash-api.onrender.com';
 // ── STATE ──
 let allItems    = [];
@@ -282,9 +279,13 @@ async function init(){
   const account = v('account'), sessid = v('sessid'), league = v('league');
   if(!account||!sessid){setStatus('กรุณากรอก Account และ POESESSID','error');return;}
   setStatus('กำลังโหลด Stash Tabs…','');
-  loadNinjaPrices(league);
+  // โหลด ninja และ tabs พร้อมกัน แต่รอทั้งคู่ก่อนแสดง tabs
+  const ninjaPromise = loadNinjaPrices(league);
   try{
-    const res = await fetch(`${API_BASE}/api/tabs?accountName=${enc(account)}&league=${enc(league)}&sessid=${enc(sessid)}`);
+    const [res] = await Promise.all([
+      fetch(`${API_BASE}/api/tabs?accountName=${enc(account)}&league=${enc(league)}&sessid=${enc(sessid)}`),
+      ninjaPromise,
+    ]);
     let data; try{data=await res.json();}catch{throw new Error('ไม่สามารถเชื่อมต่อ server');}
     if(!res.ok) throw new Error(data.error||`HTTP ${res.status}`);
     if(!data.tabs?.length) throw new Error('ไม่พบ Stash Tab');
@@ -425,10 +426,15 @@ function getClusterJewelPrice(it){
   const ilvl = it.ilvl || 0;
   const base = (it.typeLine||'').replace(/<<[^>]*>>/g,'').trim();
 
-  // poe.ninja detailsId format: "stat-slug-N-passives-ilvl"
-  const statSlug  = nameToSlug(statLine);
-  const detailsId = `${statSlug}-${passives}-passives-${ilvl}`;
+  // poe.ninja มีราคาแยกตาม levelRequired bucket: 1, 50, 68, 75, 84
+  // ของในคลัง ilvl ≥ 84 → bucket 84, ≥75 → 75, ≥68 → 68, ≥50 → 50, else → 1
+  const ILVL_BUCKETS = [84, 75, 68, 50, 1];
+  const ilvlBucket = ILVL_BUCKETS.find(b => ilvl >= b) || 1;
 
+  const statSlug = nameToSlug(statLine);
+
+  // ลอง match ด้วย bucket ก่อน
+  const detailsId = `${statSlug}-${passives}-passives-${ilvlBucket}`;
   const entry = clusterMap[detailsId];
   if(entry){
     return {
@@ -440,7 +446,7 @@ function getClusterJewelPrice(it){
     };
   }
 
-  // Fallback: match stat slug + passives (ignore ilvl)
+  // Fallback: stat slug + passives ใกล้เคียง bucket
   const fallback = Object.values(clusterMap).find(e =>
     e.passives === passives && nameToSlug(e.name) === statSlug
   );
@@ -852,9 +858,8 @@ function renderTable(){
       <td class="icon-cell">${it.icon?`<img src="${escHtml(it.icon)}" loading="lazy" alt=""/>`:'<div style="width:28px;height:28px;background:var(--bg3);border-radius:2px"></div>'}</td>
       <td class="name-cell">
         <div class="name-wrap r-${it.rarity}">
-          <span class="rarity-dot"></span>
           <div>
-            <div class="item-name">${escHtml(it.name||it.typeLine)}${linkBadge}${corruptBadge}</div>
+            <div class="item-name" onclick="copyCell(this)" title="คลิกเพื่อ copy" style="cursor:pointer">${escHtml(it.name||it.typeLine)}${linkBadge}${corruptBadge}</div>
             ${it.base?`<div class="item-base">${escHtml(it.base)}</div>`:''}
           </div>
         </div>
@@ -863,9 +868,9 @@ function renderTable(){
       <td class="num qty-cell">${it.qty.toLocaleString()}</td>
       <td class="num ${it.chaosEach!==null?'price-cell':'no-price'}">${it.chaosEach!==null?formatChaosSmall(it.chaosEach)+'c':'—'}</td>
       <td class="num ${it.totalChaos!==null?'total-cell':'no-price'}">${it.totalChaos!==null?(formatChaos(it.totalChaos)+(divinePrice>1?' <span style="color:var(--text2);font-size:11px">('+( it.totalChaos/divinePrice).toFixed(1)+'d)</span>':'')):'—'}</td>
-      <td class="real-price-cell"><input type="text" placeholder="ราคาจริง" value="${escHtml(realPrices[rowKey(it)]||'')}" oninput="onRealPriceInput('${escHtml(rowKey(it))}',this)"/></td>
-      <td class="calc-cell">${(()=>{const rp=realPrices[rowKey(it)];if(!rp)return '';const r=computeRealPrice(it.qty,rp);return r.error?'—':(r.price?r.price+'c':'—');})()}</td>
-      <td class="calc-qty-cell">${(()=>{const rp=realPrices[rowKey(it)];if(!rp)return '';const r=computeRealPrice(it.qty,rp);return r.error?r.error:(r.qty<it.qty?`ขาย ${r.qty}/${it.qty}`:(r.qty?`ขาย ${r.qty}`:''));})()}</td>
+      <td class="real-price-cell"><input type="text" placeholder="ราคาจริง" data-key="${escAttr(rowKey(it))}" value="${escHtml(realPrices[rowKey(it)]||'')}" oninput="onRealPriceInput(this)" onclick="this.select()"/></td>
+      <td class="calc-cell" onclick="copyCell(this)" title="คลิกเพื่อ copy">${(()=>{const rp=realPrices[rowKey(it)];if(!rp)return '';const r=computeRealPrice(it.qty,rp);return r.error?'—':(r.price?String(r.price):'—');})()}</td>
+      <td class="calc-qty-cell" onclick="copyCell(this)" title="คลิกเพื่อ copy">${(()=>{const rp=realPrices[rowKey(it)];if(!rp)return '';const r=computeRealPrice(it.qty,rp);return r.error?r.error:(r.qty?String(r.qty):'');})()}</td>
     </tr>`;
   }).join('');
 
@@ -942,7 +947,8 @@ function computeRealPrice(maxQty, priceStr){
   return { error:'รูปแบบไม่ถูกต้อง' };
 }
 function rowKey(it){ return `${it.name}||${it.tab}||${it.rarity}`; }
-function onRealPriceInput(key, input){
+function onRealPriceInput(input){
+  const key = input.dataset.key || '';
   realPrices[key] = input.value;
   const tr  = input.closest('tr');
   const qty = parseInt(tr.dataset.qty||'0');
@@ -952,8 +958,18 @@ function onRealPriceInput(key, input){
   input.classList.toggle('err', !!res.error);
   if(res.error){ c2.textContent='—'; c3.textContent=res.error; return; }
   if(!input.value.trim()){ c2.textContent=''; c3.textContent=''; return; }
-  c2.textContent = res.price ? res.price+'c' : '—';
-  c3.textContent = (res.qty < qty) ? `ขาย ${res.qty}/${qty}` : `ขาย ${res.qty}`;
+  c2.textContent = res.price ? String(res.price) : '—';
+  c3.textContent = res.qty ? String(res.qty) : '';
+}
+function escAttr(s){ return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function copyCell(el){
+  const txt = el.textContent.trim();
+  if(!txt || txt==='—') return;
+  navigator.clipboard.writeText(txt).then(()=>{
+    const old = el.style.color;
+    el.style.color='var(--green2)';
+    setTimeout(()=>{ el.style.color=old; }, 600);
+  }).catch(()=>{});
 }
 
 // ── UTILS ──
