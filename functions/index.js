@@ -42,15 +42,25 @@ app.get('/api/tabs', async (req, res) => {
 
 // ── /api/stash ────────────────────────────────────────────────────────────
 app.get('/api/stash', async (req, res) => {
-  const { accountName, league, tabIndex, sessid } = req.query;
+  const { accountName, league, tabIndex, tabType, sessid } = req.query;
   if (!accountName || !sessid) return res.status(400).json({ error: 'missing params' });
-  const url = `https://www.pathofexile.com/character-window/get-stash-items`
+  // Special tab types ต้องส่ง &type= ด้วย เช่น MapStash, GemStash ฯลฯ
+  const SPECIAL_TABS = new Set([
+    'MapStash','GemStash','DivinationStash','EssenceStash','FragmentStash',
+    'DelveStash','BlightStash','UltimatumStash','DeliriumStash',
+    'UniqueStash','FlaskStash','MetamorphStash','HeistStash','CurrencyStash',
+  ]);
+  let url = `https://www.pathofexile.com/character-window/get-stash-items`
     + `?accountName=${encodeURIComponent(accountName)}`
     + `&league=${encodeURIComponent(league || 'Mirage')}`
     + `&tabIndex=${tabIndex || 0}&tabs=0`;
+  if (tabType && SPECIAL_TABS.has(tabType)) {
+    url += `&type=${encodeURIComponent(tabType)}`;
+  }
   try {
     const r = await fetch(url, { headers: POE_HEADERS(sessid) });
     const text = await r.text();
+    console.log('[stash] tab', tabIndex, 'type:', tabType||'normal', 'status:', r.status);
     if (!r.ok) return res.status(r.status).json({ error: `PoE API: ${r.status}`, body: text });
     res.setHeader('Content-Type', 'application/json');
     res.send(text);

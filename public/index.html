@@ -386,7 +386,7 @@ async function loadSelected(){
     setStatus(`โหลด: ${tab.n} (${i+1}/${selected.length})…`,'');
     setProgress((i/selected.length)*100);
     try{
-      const res=await fetch(`${API_BASE}/api/stash?accountName=${enc(account)}&league=${enc(league)}&tabIndex=${idx}&sessid=${enc(sessid)}`);
+      const res=await fetch(`${API_BASE}/api/stash?accountName=${enc(account)}&league=${enc(league)}&tabIndex=${idx}&tabType=${enc(tab.type||'')}&sessid=${enc(sessid)}`);
       let data; try{data=await res.json();}catch{throw new Error('ไม่สามารถเชื่อมต่อ server');}
       if(!res.ok) throw new Error(data.error||`HTTP ${res.status}`);
       if(data.items) data.items.forEach(it=>{it._tabName=tab.n;it._tabType=tab.type;});
