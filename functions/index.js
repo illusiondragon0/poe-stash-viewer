@@ -458,7 +458,7 @@ app.get('/api/debug-item', async (req, res) => {
     const data = await r.json();
     const items = (data.items || []).filter(it =>
       !search || JSON.stringify(it).toLowerCase().includes(search.toLowerCase())
-    ).slice(0, 3); // แค่ 3 ชิ้นแรก
+    ).slice(0, 30); // แค่ 30 ชิ้นแรก
     res.json({ count: (data.items||[]).length, sample: items });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
