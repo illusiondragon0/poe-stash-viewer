@@ -420,6 +420,8 @@ app.get('/api/ninja-prices', async (req, res) => {
     fetchStashItemType('UniqueTincture'),
     fetchStashItemType('UniqueRelic'),
     fetchStashItemType('SkillGem'),
+    fetchStashItemType('BlightedMap'),
+    fetchStashItemType('BlightRavagedMap'),
     fetchClusterJewels(),
   ]);
 
