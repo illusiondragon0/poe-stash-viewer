@@ -400,3 +400,22 @@ app.get('/api/ninja-prices', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Ready on port ${PORT}`));
+
+// ── debug: ดู raw item data ────────────────────────────────────────────────
+// GET /api/debug-item?accountName=X&league=Y&tabIndex=Z&sessid=S&search=ultimatum
+app.get('/api/debug-item', async (req, res) => {
+  const { accountName, league, tabIndex, sessid, search } = req.query;
+  if (!accountName || !sessid) return res.status(400).json({ error: 'missing params' });
+  const url = `https://www.pathofexile.com/character-window/get-stash-items`
+    + `?accountName=${encodeURIComponent(accountName)}`
+    + `&league=${encodeURIComponent(league || 'Mirage')}`
+    + `&tabIndex=${tabIndex || 0}&tabs=0`;
+  try {
+    const r    = await fetch(url, { headers: POE_HEADERS(sessid) });
+    const data = await r.json();
+    const items = (data.items || []).filter(it =>
+      !search || JSON.stringify(it).toLowerCase().includes(search.toLowerCase())
+    ).slice(0, 3); // แค่ 3 ชิ้นแรก
+    res.json({ count: (data.items||[]).length, sample: items });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
