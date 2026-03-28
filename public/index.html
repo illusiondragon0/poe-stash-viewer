@@ -553,10 +553,8 @@ function parseUltimatum(it){
   if(!sacrifice || !reward) {
     const desc = it.descriptionText || '';
     if(desc) {
-      const sm = desc.match(/Sacrifice[:\s]+(.+?)(?:
-|Reward|$)/i);
-      const rm = desc.match(/Reward[:\s]+(.+?)(?:
-|$)/i);
+      const sm = desc.match(/Sacrifice[:\s]+(.+?)(?:\n|Reward|$)/i);
+      const rm = desc.match(/Reward[:\s]+(.+?)(?:\n|$)/i);
       if(sm) sacrifice = sm[1].trim();
       if(rm) reward    = rm[1].trim();
     }
