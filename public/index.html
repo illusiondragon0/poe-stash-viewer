@@ -537,17 +537,26 @@ function getStashItemPrice(it, rawName, rawType){
 // stash item มี properties: [{name:"Map Tier", values:[["16",0]]}]
 // ninja name format: "Blighted Map (Tier 16)" / "Blight-ravaged Map (Tier 16)"
 function getBlightedMapPrice(it){
+  // typeLine = "Blight-ravaged Map (Tier 16)" หรือ "Blighted Crimson Township Map"
+  // baseType = "Blight-ravaged Map (Tier 16)" (มี tier ในชื่อ)
+  const rawBase  = (it.baseType||'').replace(/<<[^>]*>>/g,'').trim();
   const typeLine = (it.typeLine||'').replace(/<<[^>]*>>/g,'').trim();
-  const isRavaged = typeLine.toLowerCase().includes('blight-ravaged') ||
-                    typeLine.toLowerCase().includes('blightravaged');
+  const src      = rawBase || typeLine;
+  const srcLower = src.toLowerCase();
 
-  // หา map tier จาก properties
-  let tier = 0;
-  (it.properties||[]).forEach(p=>{
-    if((p.name||'').includes('Map Tier') || (p.name||'').includes('Tier'))
-      tier = parseInt((p.values&&p.values[0]&&p.values[0][0])||'0')||0;
-  });
-  if(!tier) return null;
+  const isRavaged = srcLower.includes('blight-ravaged') || srcLower.includes('blightravaged');
+  const isBlighted = srcLower.includes('blighted');
+  if(!isRavaged && !isBlighted) return null;
+
+  // ลอง match จากชื่อตรงๆ ก่อน (baseType มักตรงกับ ninja)
+  const directKey = srcLower;
+  if(stashNames[directKey] && stashNames[directKey].length)
+    return { chaosValue: stashNames[directKey][0].chaosValue, icon: stashNames[directKey][0].icon, source: stashNames[directKey][0].source };
+
+  // parse tier จาก "(Tier N)" ใน baseType หรือ typeLine
+  const tierMatch = src.match(/\(Tier\s*(\d+)\)/i);
+  if(!tierMatch) return null;
+  const tier = parseInt(tierMatch[1]);
 
   const prefix  = isRavaged ? 'blight-ravaged map' : 'blighted map';
   const nameKey = `${prefix} (tier ${tier})`;
@@ -635,13 +644,14 @@ function getGemPrice(it, rawType){
   if(!scored.length) return null;
   const best = scored[0].e;
 
-  // โชว์ค่าจริง ไม่ใช่ lookup value
-  const label = `${rawType} ${gemLevel}/${gemQuality}${corrupted?' Corrupted':''}`;
+  // โชว์ค่าจริง: name บรรทัดหลัก, level/quality บรรทัดรอง
+  // ไม่ใช้ displayLabel แล้ว ใช้ gemBase แทน
+  const gemBase = `Level ${gemLevel} Quality ${gemQuality}${corrupted?' Corrupted':''}`;
   return {
     chaosValue: best.chaosValue,
     icon: best.icon,
     source: best.source,
-    displayLabel: label,
+    gemBase,  // บรรทัดที่ 2 ใน name cell
   };
 }
 
@@ -745,14 +755,17 @@ function getPriceForItem(it){
     if(bp) return bp;
   }
 
-  // 4. Skill Gems — ใช้ typeLine เสมอ ไม่ใช้ name (name อาจเป็น trigger skill)
+  // 4. Skill Gems — ใช้ baseType ก่อน (hybrid gem: typeLine=trigger, baseType=gem จริง)
   if(rarity === 'Gem'){
-    const gp = getGemPrice(it, rawType);
+    const rawBase = (it.baseType||'').replace(/<<[^>]*>>/g,'').trim();
+    const gemName = rawBase || rawType; // baseType มีค่าเสมอสำหรับ hybrid gems
+    const gp = getGemPrice(it, gemName) || (gemName !== rawType ? getGemPrice(it, rawType) : null);
     if(gp) return gp;
-    // fallback ninja map
-    const rtKey = rawType.toLowerCase();
-    const rtNoSup = rtKey.replace(/ support$/, '');
-    return ninjaMap[rtKey] || ninjaMap[rtNoSup] || null;
+    const keyB   = gemName.toLowerCase();
+    const keyBNS = keyB.replace(/ support$/, '');
+    const keyT   = rawType.toLowerCase();
+    const keyTNS = keyT.replace(/ support$/, '');
+    return ninjaMap[keyB] || ninjaMap[keyBNS] || ninjaMap[keyT] || ninjaMap[keyTNS] || null;
   }
 
   // 4. Unique items — use stash variant matching (handles links/Foulborn)
@@ -838,11 +851,16 @@ function processItems(items){
     // Override display name
     let finalName = displayName;
     if(rarity === 'Gem'){
-      // Gem: ใช้ rawType (typeLine) เสมอ ไม่ใช้ rawName ที่อาจเป็น trigger skill
-      finalName = rawType || displayName;
+      // Gem: ใช้ baseType ก่อน (hybrid gem มี typeLine=trigger แต่ baseType=ชื่อจริง)
+      const rawBase = (it.baseType||'').replace(/<<[^>]*>>/g,'').trim();
+      finalName = rawBase || rawType || displayName;
     }
-    if(pd && pd.displayLabel){
-      // Inscribed Ultimatum / Gem → โชว์ label ที่มี level/quality
+    if(rarity === 'Gem' && pd && pd.gemBase){
+      // Gem: ชื่อ gem ไปอยู่บรรทัดแรก, level/quality บรรทัดสอง (base)
+      // finalName ถูก set แล้วข้างบน ไม่ต้อง override
+      base = pd.gemBase;
+    } else if(pd && pd.displayLabel){
+      // Inscribed Ultimatum → โชว์ reward/sacrifice
       finalName = pd.displayLabel;
     } else if(rawType.includes('Cluster Jewel') && pd && pd.displayName){
       finalName = pd.displayName;
@@ -928,7 +946,7 @@ function renderTable(){
   const rows=filtered.map(it=>{
     // Link badge
     const linkBadge = it.links >= 5 ? `<span style="font-size:10px;color:${it.links===6?'#e8d890':'#aaa'};margin-left:4px">${it.links}L</span>` : '';
-    const corruptBadge = it.corrupted ? `<span style="font-size:10px;color:#e57373;margin-left:3px">C</span>` : '';
+    const corruptBadge = (it.corrupted && it.rarity !== 'Gem') ? `<span style="font-size:10px;color:#e57373;margin-left:3px">C</span>` : '';
     return `
     <tr data-qty="${it.qty}">
       <td class="icon-cell">${it.icon?`<img src="${escHtml(it.icon)}" loading="lazy" alt=""/>`:'<div style="width:28px;height:28px;background:var(--bg3);border-radius:2px"></div>'}</td>
