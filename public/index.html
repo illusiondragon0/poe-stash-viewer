@@ -517,41 +517,50 @@ function getGemPrice(it, rawType){
   });
   const corrupted = it.corrupted || false;
 
-  // stash API SkillGem entry มี .gemLevel, .gemQuality, .corrupted ตรงๆ
-  // variant format: "21/23c" = level/quality + c ถ้า corrupted
-  function matchScore(e){
+  // Normalize: level 1-19 → lookup 1, quality 1-19 → lookup 0
+  // เพราะ poe.ninja ไม่มีราคาสำหรับ gem level ต่ำ ใช้ level 1 แทน
+  const lookupLevel = gemLevel >= 20 ? gemLevel : 1;
+  const lookupQual  = gemQuality >= 20 ? gemQuality : 0;
+
+  function matchScore(e, allowCorruptMismatch){
     const eCorrupted = e.corrupted || false;
-    if(eCorrupted !== corrupted) return -1; // ต้อง match corrupted ก่อน
+    // ถ้า allow mismatch = false ต้อง match; ถ้า true ยอมรับ mismatch
+    if(!allowCorruptMismatch && eCorrupted !== corrupted) return -1;
 
-    // ลอง match จาก gemLevel/gemQuality โดยตรง (stash overview มี field นี้)
-    if(e.gemLevel != null && e.gemQuality != null){
-      let s = 0;
-      if(e.gemLevel   === gemLevel)   s += 60;
-      if(e.gemQuality === gemQuality) s += 30;
-      return s;
-    }
-
-    // fallback: parse จาก variant string "20/20" "21/23c"
-    if(!e.variant) return 5;
-    const v = e.variant.replace(/c$/i,'');
-    const parts = v.split('/');
-    const vLevel = parseInt(parts[0])||0;
-    const vQual  = parseInt(parts[1])||0;
     let s = 0;
-    if(vLevel === gemLevel)   s += 60;
-    if(vQual  === gemQuality) s += 30;
+    // match level
+    const eLevel = e.gemLevel != null ? e.gemLevel : (() => {
+      if(!e.variant) return 1;
+      return parseInt(e.variant.replace(/c$/i,'').split('/')[0]) || 1;
+    })();
+    const eQual = e.gemQuality != null ? e.gemQuality : (() => {
+      if(!e.variant) return 0;
+      return parseInt(e.variant.replace(/c$/i,'').split('/')[1]) || 0;
+    })();
+
+    if(eLevel === lookupLevel) s += 60;
+    if(eQual  === lookupQual)  s += 30;
     return s;
   }
 
-  const scored = entries
-    .map(e=>({e, s:matchScore(e)}))
+  // Pass 1: strict corrupted match
+  let scored = entries
+    .map(e=>({e, s:matchScore(e, false)}))
     .filter(x=>x.s >= 0)
     .sort((a,b)=>b.s-a.s);
+
+  // Pass 2: ถ้า corrupted แต่หาไม่เจอ → ใช้ non-corrupted แทน (ราคาใกล้เคียง)
+  if(!scored.length && corrupted){
+    scored = entries
+      .map(e=>({e, s:matchScore(e, true)}))
+      .filter(x=>x.s >= 0)
+      .sort((a,b)=>b.s-a.s);
+  }
 
   if(!scored.length) return null;
   const best = scored[0].e;
 
-  // สร้าง displayLabel สำหรับ gem: "Name level/quality [Corrupted]"
+  // displayLabel: "Name level/quality Corrupted" (โชว์ค่าจริง ไม่ใช่ lookup)
   const label = `${rawType} ${gemLevel}/${gemQuality}${corrupted?' Corrupted':''}`;
   return {
     chaosValue: best.chaosValue,
@@ -715,7 +724,7 @@ function processItems(items){
     } else {
       gKey = `__nogroup__${Math.random()}`;
     }
-    if(stackable && groupMap[gKey]){
+    if(groupMap[gKey] && !gKey.startsWith('__nogroup__')){
       groupMap[gKey].stackSize = (groupMap[gKey].stackSize||1) + (it.stackSize||1);
     } else {
       groupMap[gKey] = { ...it, stackSize: it.stackSize||1 };
