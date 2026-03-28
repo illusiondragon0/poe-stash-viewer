@@ -381,34 +381,45 @@ function countLinks(it){
 // ── Cluster Jewel matching ─────────────────────────────────────────────────
 // From stash item: enchantMods[0] = stat text, levelRequired, hybrid/passives count
 function getClusterJewelPrice(it){
-  // PoE stash API: Cluster Jewel enchant stat อยู่ใน implicitMods[0]
-  // ส่วน enchantMods มักว่างเปล่าสำหรับ cluster jewel
-  const enchant = (it.enchantMods && it.enchantMods[0])
-               || (it.implicitMods && it.implicitMods[0])
-               || '';
-  if(!enchant) return null;
+  // PoE stash API (verified from raw data):
+  // enchantMods = [
+  //   "Adds 11 Passive Skills",                                              ← passives
+  //   "2 Added Passive Skills are Jewel Sockets",                            ← optional
+  //   "Added Small Passive Skills grant: Minions deal 10% increased Damage"  ← STAT
+  // ]
+  const enchantMods = it.enchantMods || [];
 
-  // passives count: จาก properties "Adds # Passive Skills"
-  // หรือ implicitMods ที่มี "Adds X Passive Skills"
+  // หา passives count จาก "Adds N Passive Skills"
   let passives = 0;
-  (it.properties||[]).forEach(p=>{
-    if(p.name && p.name.includes('Passive')){
-      passives = parseInt((p.values&&p.values[0]&&p.values[0][0])||'0')||0;
+  let statLine = '';
+
+  enchantMods.forEach(m => {
+    const pm = m.match(/^Adds\s+(\d+)\s+Passive/i);
+    if(pm) { passives = parseInt(pm[1]); return; }
+    // stat line ขึ้นต้นด้วย "Added Small Passive Skills grant:"
+    if(m.startsWith('Added Small Passive Skills grant:')) {
+      statLine = m.replace('Added Small Passive Skills grant:', '').trim();
     }
   });
-  if(!passives){
-    // ลอง parse จาก implicitMods เช่น "Adds 3 Passive Skills"
-    (it.implicitMods||[]).forEach(m=>{
-      const pm = m.match(/Adds\s+(\d+)\s+Passive/i);
-      if(pm) passives = parseInt(pm[1]);
+
+  // fallback: implicitMods (Rare cluster jewels)
+  if(!statLine) {
+    (it.implicitMods||[]).forEach(m => {
+      if(m.startsWith('Added Small Passive Skills grant:')) {
+        statLine = m.replace('Added Small Passive Skills grant:', '').trim();
+      }
+      const pm = m.match(/^Adds\s+(\d+)\s+Passive/i);
+      if(pm && !passives) passives = parseInt(pm[1]);
     });
   }
+
+  if(!statLine) return null;
 
   const ilvl = it.ilvl || 0;
   const base = (it.typeLine||'').replace(/<<[^>]*>>/g,'').trim();
 
   // poe.ninja detailsId format: "stat-slug-N-passives-ilvl"
-  const statSlug  = nameToSlug(enchant);
+  const statSlug  = nameToSlug(statLine);
   const detailsId = `${statSlug}-${passives}-passives-${ilvl}`;
 
   const entry = clusterMap[detailsId];
@@ -417,12 +428,12 @@ function getClusterJewelPrice(it){
       chaosValue: entry.chaosValue,
       icon: entry.icon,
       source: 'cluster',
-      displayName: `${enchant} ilv${ilvl} ${passives} passives`,
+      displayName: `${statLine} ilv${ilvl} ${passives} passives`,
       base,
     };
   }
 
-  // Fallback: match enchant slug + passives count (ignore ilvl)
+  // Fallback: match stat slug + passives (ignore ilvl)
   const fallback = Object.values(clusterMap).find(e =>
     e.passives === passives && nameToSlug(e.name) === statSlug
   );
@@ -431,12 +442,12 @@ function getClusterJewelPrice(it){
       chaosValue: fallback.chaosValue,
       icon: fallback.icon,
       source: 'cluster-approx',
-      displayName: `${enchant} ilv${ilvl} ${passives} passives`,
+      displayName: `${statLine} ilv${ilvl} ${passives} passives`,
       base,
     };
   }
 
-  // Last fallback: ลอง match ด้วย enchant slug อย่างเดียว (ไม่สนจำนวน passive)
+  // Loose fallback: stat slug only
   const looseFallback = Object.values(clusterMap).find(e =>
     nameToSlug(e.name) === statSlug
   );
@@ -445,7 +456,7 @@ function getClusterJewelPrice(it){
       chaosValue: looseFallback.chaosValue,
       icon: looseFallback.icon,
       source: 'cluster-loose',
-      displayName: `${enchant} ilv${ilvl} ${passives||'?'} passives`,
+      displayName: `${statLine} ilv${ilvl} ${passives||'?'} passives`,
       base,
     };
   }
@@ -530,52 +541,31 @@ function getGemPrice(it, rawType){
 //                {name:"Reward", values:[["Doubles sacrificed Currency",0]]}]
 // หรือบาง version อยู่ใน additionalProperties, explicitMods, หรือ descriptionText
 function parseUltimatum(it){
-  // รวมทุก source ที่เป็นไปได้
-  const props = {};
-  // จาก properties array
+  // PoE stash API format (verified from raw data):
+  // properties[type=51]: sacrifice, values=[["ItemName",18],["xN",0]]  → join เป็น "ItemName xN"
+  // properties[type=52]: reward,    values=[["Reward text",0]]
+  // type=51 = sacrifice, type=52 = reward (fixed types)
+  let sacrifice = '';
+  let reward    = '';
+
   (it.properties||[]).forEach(p => {
-    if(p.name && p.values && p.values[0]) {
-      props[p.name.toLowerCase()] = p.values[0][0] || '';
+    const t = p.type;
+    const vals = p.values || [];
+    if(t === 51) {
+      // Sacrifice: join all values เป็น string เดียว เช่น ["Orb of Scouring","x15"] → "Orb of Scouring x15"
+      sacrifice = vals.map(v => v[0]).join(' ').trim();
+    } else if(t === 52) {
+      reward = (vals[0] && vals[0][0]) || '';
     }
   });
-  // จาก additionalProperties (บาง version)
-  (it.additionalProperties||[]).forEach(p => {
-    if(p.name && p.values && p.values[0]) {
-      props[p.name.toLowerCase()] = p.values[0][0] || '';
-    }
-  });
-
-  // หา sacrifice และ reward
-  let sacrifice = props['requires sacrifice'] || props['sacrifice'] || '';
-  let reward    = props['reward'] || props['rewards'] || '';
-
-  // fallback: descriptionText
-  if(!sacrifice || !reward) {
-    const desc = it.descriptionText || '';
-    if(desc) {
-      const sm = desc.match(/Sacrifice[:\s]+(.+?)(?:\n|Reward|$)/i);
-      const rm = desc.match(/Reward[:\s]+(.+?)(?:\n|$)/i);
-      if(sm) sacrifice = sm[1].trim();
-      if(rm) reward    = rm[1].trim();
-    }
-  }
-
-  // fallback: explicitMods
-  if(!sacrifice || !reward) {
-    (it.explicitMods||[]).forEach(m => {
-      if(/sacrifice/i.test(m)) sacrifice = m.replace(/.*Sacrifice[:\s]*/i,'').trim();
-      if(/reward/i.test(m))    reward    = m.replace(/.*Reward[:\s]*/i,'').trim();
-    });
-  }
 
   if(!sacrifice && !reward) return null;
 
-  // Parse quantity จาก sacrifice เช่น "Divine Orb x8" หรือ "The Primordial x3"
-  const qtyMatch = sacrifice.match(/^(.+?)\s*[xX×]\s*(\d+)$/);
+  // Parse "ItemName x15" → sacItem="ItemName", sacQty=15
+  const qtyMatch = sacrifice.match(/^(.+?)\s+x(\d+)$/i);
   const sacItem  = qtyMatch ? qtyMatch[1].trim() : sacrifice.trim();
   const sacQty   = qtyMatch ? parseInt(qtyMatch[2]) : 1;
 
-  // Reward category detection
   const rewardLower    = reward.toLowerCase();
   const rewardIsDouble = rewardLower.includes('doubles');
   const rewardIsDivCard = rewardLower.includes('divination');
@@ -585,17 +575,17 @@ function parseUltimatum(it){
   let rewardQty   = 1;
 
   if(rewardIsDivCard) {
-    // Divination Cards: sacrifice = "The Primordial x3"
+    // "Doubles sacrificed Divination Cards" → แสดง sacrifice item x qty
     displayName = qtyMatch ? `${sacItem} x${sacQty}` : sacItem;
     priceKey    = sacItem;
-    rewardQty   = sacQty; // ได้การ์ดคืน sacQty ใบ
+    rewardQty   = sacQty;
   } else if(rewardIsDouble) {
-    // Currency doubles: ได้ sacItem x sacQty x 2
+    // "Doubles sacrificed Currency" → ได้ sacItem x (sacQty * 2)
     displayName = `${sacItem} x${sacQty * 2}`;
     priceKey    = sacItem;
     rewardQty   = sacQty * 2;
   } else {
-    // Unique item หรืออื่นๆ: reward คือชื่อ item ที่ได้
+    // Unique reward: reward text คือชื่อ item
     displayName = reward.trim();
     priceKey    = reward.trim();
     rewardQty   = 1;
