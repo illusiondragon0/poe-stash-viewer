@@ -105,6 +105,12 @@ td.qty-cell{color:var(--text);font-weight:600;font-size:13px}
 td.price-cell{color:#e8d890}
 td.total-cell{color:var(--gold2);font-weight:700}
 td.no-price{color:var(--text3);font-size:12px}
+td.real-price-cell{padding:4px 8px}
+td.real-price-cell input{width:90px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:3px 6px;border-radius:3px;font-size:12px;outline:none;text-align:right}
+td.real-price-cell input:focus{border-color:var(--accent)}
+td.real-price-cell input.err{border-color:var(--red);color:var(--red)}
+td.calc-cell{color:#7ec8a0;font-size:12px;text-align:right;white-space:nowrap}
+td.calc-qty-cell{color:var(--text2);font-size:12px;text-align:right;white-space:nowrap}
 td.tab-cell{color:var(--text2);font-size:12px}
 .rarity-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;flex-shrink:0}
 .name-wrap{display:flex;align-items:center}
@@ -259,6 +265,7 @@ let clusterMap  = {};   // detailsId  → ClusterJewel entry
 let tabsData    = [];
 let checkedTabs = new Set();
 let sortKey     = 'totalChaos';
+let realPrices  = {};   // rowKey → realPrice string ที่ user กรอก
 let sortDir     = -1;
 let divinePrice = 1;
 
@@ -841,7 +848,7 @@ function renderTable(){
     const linkBadge = it.links >= 5 ? `<span style="font-size:10px;color:${it.links===6?'#e8d890':'#aaa'};margin-left:4px">${it.links}L</span>` : '';
     const corruptBadge = it.corrupted ? `<span style="font-size:10px;color:#e57373;margin-left:3px">C</span>` : '';
     return `
-    <tr>
+    <tr data-qty="${it.qty}">
       <td class="icon-cell">${it.icon?`<img src="${escHtml(it.icon)}" loading="lazy" alt=""/>`:'<div style="width:28px;height:28px;background:var(--bg3);border-radius:2px"></div>'}</td>
       <td class="name-cell">
         <div class="name-wrap r-${it.rarity}">
@@ -856,6 +863,9 @@ function renderTable(){
       <td class="num qty-cell">${it.qty.toLocaleString()}</td>
       <td class="num ${it.chaosEach!==null?'price-cell':'no-price'}">${it.chaosEach!==null?formatChaosSmall(it.chaosEach)+'c':'—'}</td>
       <td class="num ${it.totalChaos!==null?'total-cell':'no-price'}">${it.totalChaos!==null?(formatChaos(it.totalChaos)+(divinePrice>1?' <span style="color:var(--text2);font-size:11px">('+( it.totalChaos/divinePrice).toFixed(1)+'d)</span>':'')):'—'}</td>
+      <td class="real-price-cell"><input type="text" placeholder="ราคาจริง" value="${escHtml(realPrices[rowKey(it)]||'')}" oninput="onRealPriceInput('${escHtml(rowKey(it))}',this)"/></td>
+      <td class="calc-cell">${(()=>{const rp=realPrices[rowKey(it)];if(!rp)return '';const r=computeRealPrice(it.qty,rp);return r.error?'—':(r.price?r.price+'c':'—');})()}</td>
+      <td class="calc-qty-cell">${(()=>{const rp=realPrices[rowKey(it)];if(!rp)return '';const r=computeRealPrice(it.qty,rp);return r.error?r.error:(r.qty<it.qty?`ขาย ${r.qty}/${it.qty}`:(r.qty?`ขาย ${r.qty}`:''));})()}</td>
     </tr>`;
   }).join('');
 
@@ -868,6 +878,9 @@ function renderTable(){
         ${col('qty','Quantity','num')}
         ${col('chaosEach','Price','num')}
         ${col('totalChaos','Total','num')}
+        <th style="width:110px">Real Price</th>
+        <th class="num" style="width:80px">Calc</th>
+        <th class="num" style="width:100px">Qty</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
@@ -901,6 +914,46 @@ function setBadge(s,t){
   const b=document.getElementById('ninjaBadge');
   b.textContent=t;
   b.className='ninja-status'+(s==='ok'?'':s==='error'?' error':' loading');
+}
+
+// ── REAL PRICE COMPUTE ────────────────────────────────────────────────────
+const numRe  = /^\d+(\.\d+)?$/;
+const fracRe = /^(\d+(?:\.\d+)?)\/((\d+(?:\.\d+)?))$/;
+function isWhole(n){ return Math.abs(n - Math.round(n)) < 0.001; }
+function computeRealPrice(maxQty, priceStr){
+  const s = String(priceStr).trim();
+  const b = Math.floor(parseFloat(maxQty));
+  if(!s || s==='0' || isNaN(b) || b<=0) return { price:0, qty:0 };
+  if(numRe.test(s)){
+    const p = parseFloat(s);
+    for(let q=b; q>=1; q--)
+      if(isWhole(q*p)) return { price: Math.round(q*p), qty: q };
+    return { price:0, qty:0 };
+  }
+  if(fracRe.test(s)){
+    const m=s.match(fracRe), num=parseFloat(m[1]), den=parseFloat(m[3]);
+    if(den===0) return { error:'หารด้วยศูนย์' };
+    for(let q=b; q>=1; q--){
+      const v=(q*num)/den;
+      if(isWhole(v)) return { price: Math.round(v), qty: q };
+    }
+    return { price:0, qty:0 };
+  }
+  return { error:'รูปแบบไม่ถูกต้อง' };
+}
+function rowKey(it){ return `${it.name}||${it.tab}||${it.rarity}`; }
+function onRealPriceInput(key, input){
+  realPrices[key] = input.value;
+  const tr  = input.closest('tr');
+  const qty = parseInt(tr.dataset.qty||'0');
+  const res = computeRealPrice(qty, input.value);
+  const c2  = tr.querySelector('.calc-cell');
+  const c3  = tr.querySelector('.calc-qty-cell');
+  input.classList.toggle('err', !!res.error);
+  if(res.error){ c2.textContent='—'; c3.textContent=res.error; return; }
+  if(!input.value.trim()){ c2.textContent=''; c3.textContent=''; return; }
+  c2.textContent = res.price ? res.price+'c' : '—';
+  c3.textContent = (res.qty < qty) ? `ขาย ${res.qty}/${qty}` : `ขาย ${res.qty}`;
 }
 
 // ── UTILS ──
