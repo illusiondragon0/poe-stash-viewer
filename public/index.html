@@ -154,7 +154,7 @@ td.tab-cell{color:var(--text2);font-size:12px}
   <span class="topbar-logo">⚔ PoE Stash</span>
   <div class="topbar-group">
     <span style="font-size:11px;color:var(--text2)">Account</span>
-    <input id="account" type="text" value="illusionDragon#2899" placeholder="Account Name"/>
+    <input id="account" type="text" value="" placeholder="Account Name"/>
   </div>
   <div class="topbar-group">
     <span style="font-size:11px;color:var(--text2)">POESESSID</span>
@@ -501,38 +501,64 @@ function getStashItemPrice(it, rawName, rawType){
   return { chaosValue: best.chaosValue, icon: best.icon, source: best.source };
 }
 
-// ── Gem matching ───────────────────────────────────────────────────────────
+// ── Gem matching ด้วย gemLevel / gemQuality / corrupted ────────────────────
 function getGemPrice(it, rawType){
   const nameKey = rawType.toLowerCase();
   const entries = stashNames[nameKey];
   if(!entries || !entries.length) return null;
 
-  // Gem properties: quality, level, corrupted
-  let gemLevel = 1, quality = 0;
+  // อ่านค่าจาก stash item properties
+  let gemLevel = 1, gemQuality = 0;
   (it.properties||[]).forEach(p=>{
-    if(p.name==='Level')    gemLevel = parseInt((p.values&&p.values[0]&&p.values[0][0])||'1')||1;
-    if(p.name==='Quality')  quality  = parseInt(((p.values&&p.values[0]&&p.values[0][0])||'').replace('%',''))||0;
+    if(p.name==='Level')
+      gemLevel  = parseInt((p.values&&p.values[0]&&p.values[0][0])||'1')||1;
+    if(p.name==='Quality')
+      gemQuality = parseInt(((p.values&&p.values[0]&&p.values[0][0])||'').replace('%',''))||0;
   });
   const corrupted = it.corrupted || false;
 
-  // variant format: "20/20" "21/20c" "1/0" etc. (level/quality + c for corrupted)
+  // stash API SkillGem entry มี .gemLevel, .gemQuality, .corrupted ตรงๆ
+  // variant format: "21/23c" = level/quality + c ถ้า corrupted
   function matchScore(e){
-    if(!e.variant) return 10; // no variant preference, generic match
-    const v = e.variant; // e.g. "20/20c" "21" "20c"
-    const hasC = v.endsWith('c');
-    const parts = v.replace(/c$/,'').split('/');
+    const eCorrupted = e.corrupted || false;
+    if(eCorrupted !== corrupted) return -1; // ต้อง match corrupted ก่อน
+
+    // ลอง match จาก gemLevel/gemQuality โดยตรง (stash overview มี field นี้)
+    if(e.gemLevel != null && e.gemQuality != null){
+      let s = 0;
+      if(e.gemLevel   === gemLevel)   s += 60;
+      if(e.gemQuality === gemQuality) s += 30;
+      return s;
+    }
+
+    // fallback: parse จาก variant string "20/20" "21/23c"
+    if(!e.variant) return 5;
+    const v = e.variant.replace(/c$/i,'');
+    const parts = v.split('/');
     const vLevel = parseInt(parts[0])||0;
     const vQual  = parseInt(parts[1])||0;
-    if(hasC !== corrupted) return -1; // corrupted mismatch
     let s = 0;
-    if(vLevel === gemLevel) s += 50;
-    if(vQual  === quality)  s += 30;
+    if(vLevel === gemLevel)   s += 60;
+    if(vQual  === gemQuality) s += 30;
     return s;
   }
 
-  const scored = entries.map(e=>({e,s:matchScore(e)})).filter(x=>x.s>=0).sort((a,b)=>b.s-a.s);
+  const scored = entries
+    .map(e=>({e, s:matchScore(e)}))
+    .filter(x=>x.s >= 0)
+    .sort((a,b)=>b.s-a.s);
+
   if(!scored.length) return null;
-  return { chaosValue: scored[0].e.chaosValue, icon: scored[0].e.icon, source: scored[0].e.source };
+  const best = scored[0].e;
+
+  // สร้าง displayLabel สำหรับ gem: "Name level/quality [Corrupted]"
+  const label = `${rawType} ${gemLevel}/${gemQuality}${corrupted?' Corrupted':''}`;
+  return {
+    chaosValue: best.chaosValue,
+    icon: best.icon,
+    source: best.source,
+    displayLabel: label,
+  };
 }
 
 // ── Inscribed Ultimatum parsing ────────────────────────────────────────────
@@ -668,9 +694,27 @@ function processItems(items){
       (rarity === 'Currency' || rarity === 'Divination' || rarity === 'Normal');
     const displayName = rawName || rawType;
     // Only group if stackable and identical
-    const gKey = stackable
-      ? `${displayName.toLowerCase()}||${it._tabName||''}`
-      : `__nogroup__${Math.random()}`; // never group
+    let gKey;
+    if(stackable){
+      gKey = `${displayName.toLowerCase()}||${it._tabName||''}`;
+    } else if(isCluster){
+      // Cluster Jewel: group ด้วย enchant stat + passives + ilvl (ไม่สนชื่อ item หรือ rarity)
+      const enc = it.enchantMods || [];
+      let cStat = '', cPass = 0;
+      enc.forEach(m => {
+        const pm = m.match(/^Adds\s+(\d+)\s+Passive/i);
+        if(pm) cPass = parseInt(pm[1]);
+        if(m.startsWith('Added Small Passive Skills grant:'))
+          cStat = m.replace('Added Small Passive Skills grant:','').trim().toLowerCase();
+      });
+      if(cStat){
+        gKey = `cluster||${cStat}||${cPass}||${it.ilvl||0}||${it._tabName||''}`;
+      } else {
+        gKey = `__nogroup__${Math.random()}`;
+      }
+    } else {
+      gKey = `__nogroup__${Math.random()}`;
+    }
     if(stackable && groupMap[gKey]){
       groupMap[gKey].stackSize = (groupMap[gKey].stackSize||1) + (it.stackSize||1);
     } else {
@@ -698,9 +742,13 @@ function processItems(items){
 
     if(!pd){ missCount++; if(missCount<=15) console.log('[no price]', rawName||'—', '|', rawType); }
 
-    // For Cluster Jewels, override display name
+    // Override display name
     let finalName = displayName;
-    if(rawType.includes('Cluster Jewel') && pd && pd.displayName){
+    if(pd && pd.displayLabel){
+      // Inscribed Ultimatum → โชว์ reward/sacrifice
+      finalName = pd.displayLabel;
+    } else if(rawType.includes('Cluster Jewel') && pd && pd.displayName){
+      // Cluster Jewel → โชว์ enchant stat
       finalName = pd.displayName;
       base = rawType;
     }
