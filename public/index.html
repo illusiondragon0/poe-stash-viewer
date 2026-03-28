@@ -310,8 +310,11 @@ async function init(){
     if(!data.tabs?.length) throw new Error('ไม่พบ Stash Tab');
     tabsData = data.tabs;
     renderSidebar();
+    loadTrackedTabs(); // โหลด tabs ที่เคยเลือกไว้
+    renderSidebar();   // render ใหม่พร้อม checked state
     document.getElementById('sidebarActions').style.display='flex';
     document.getElementById('btnLoad').style.display='block';
+    document.getElementById('btnLoad').disabled = checkedTabs.size===0;
     setStatus(`พบ ${data.tabs.length} tabs — เลือก tab แล้วกด Load Items`,'success');
   }catch(e){setStatus(`⚠ ${e.message}`,'error');}
 }
@@ -331,16 +334,36 @@ function renderSidebar(){
   }).join('');
 }
 
+function saveTrackedTabs(){
+  try{
+    const key = 'poe_tabs_' + v('account').replace(/[^a-z0-9]/gi,'_');
+    const names = [...checkedTabs].map(i => tabsData[i]?.n || '');
+    localStorage.setItem(key, JSON.stringify(names));
+  }catch(e){}
+}
+function loadTrackedTabs(){
+  try{
+    const key = 'poe_tabs_' + v('account').replace(/[^a-z0-9]/gi,'_');
+    const saved = JSON.parse(localStorage.getItem(key) || '[]');
+    if(!saved.length) return;
+    checkedTabs.clear();
+    tabsData.forEach((tab, i) => {
+      if(saved.includes(tab.n)) checkedTabs.add(i);
+    });
+  }catch(e){}
+}
 function toggleTab(i){
   if(checkedTabs.has(i)) checkedTabs.delete(i);
   else checkedTabs.add(i);
   document.getElementById('btnLoad').disabled = checkedTabs.size===0;
+  saveTrackedTabs();
   renderSidebar();
 }
 function selectAll(val){
   if(val) tabsData.forEach((_,i)=>checkedTabs.add(i));
   else checkedTabs.clear();
   document.getElementById('btnLoad').disabled = checkedTabs.size===0;
+  saveTrackedTabs();
   renderSidebar();
 }
 
@@ -750,9 +773,16 @@ function getPriceForItem(it){
   }
 
   // 3. Blighted / Blight-ravaged Maps
-  if(rawType.toLowerCase().includes('blighted') && rawType.toLowerCase().includes('map')){
-    const bp = getBlightedMapPrice(it);
-    if(bp) return bp;
+  {
+    const rtl = rawType.toLowerCase();
+    const btl = ((it.baseType||'').replace(/<<[^>]*>>/g,'').trim()).toLowerCase();
+    const isB = (rtl.includes('blighted') || rtl.includes('blight-ravaged') ||
+                 btl.includes('blighted') || btl.includes('blight-ravaged')) &&
+                (rtl.includes('map') || btl.includes('map'));
+    if(isB){
+      const bp = getBlightedMapPrice(it);
+      if(bp) return bp;
+    }
   }
 
   // 4. Skill Gems — ใช้ baseType ก่อน (hybrid gem: typeLine=trigger, baseType=gem จริง)
