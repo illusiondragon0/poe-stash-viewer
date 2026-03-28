@@ -367,9 +367,47 @@ app.get('/api/ninja-prices', async (req, res) => {
 
   await Promise.all([
     'Scarab','Oil','Essence','DeliriumOrb','DivinationCard',
-    'Artifact','Fossil','Resonator','Tattoo','Omen',
+    'Artifact','Fossil','Resonator','Omen',
     'AllflameEmber','Runegraft','DjinnCoin','Astrolabe',
   ].map(fetchItemType));
+
+  // Tattoo: ใช้ exchange overview โดยตรง (id = slug, primaryValue = chaos rate)
+  await (async () => {
+    try {
+      const [exRes, itemRes] = await Promise.all([
+        fetch(`${NINJA}/poe1/api/economy/exchange/current/overview?league=${encodeURIComponent(lg)}&type=Tattoo`, { headers: H }),
+        fetch(`${NINJA}/api/data/itemoverview?league=${encodeURIComponent(lg)}&type=Tattoo`, { headers: H }),
+      ]);
+      const exData   = exRes.ok   ? await exRes.json()   : { lines: [] };
+      const itemData = itemRes.ok ? await itemRes.json() : { lines: [] };
+
+      // build icon map from itemoverview
+      const iconBySlug = {};
+      const iconByName = {};
+      (itemData.lines || []).forEach(line => {
+        if (line.name) {
+          iconByName[line.name.toLowerCase()] = line.icon;
+          iconBySlug[nameToSlug(line.name)]   = line.icon;
+          // เก็บราคา fallback จาก itemoverview ด้วย
+          if (!priceMap[line.name.toLowerCase()] && line.chaosValue) {
+            priceMap[line.name.toLowerCase()] = { chaosValue: line.chaosValue, icon: line.icon||null, source: 'ov-Tattoo' };
+          }
+        }
+      });
+
+      // exchange-first: id → primaryValue, convert slug → real name
+      (exData.lines || []).forEach(l => {
+        if (!l.id || l.primaryValue == null) return;
+        const realName = slugToName(l.id);
+        const key      = realName.toLowerCase();
+        const icon     = iconBySlug[l.id] || iconByName[key] || null;
+        // override ด้วย exchange price
+        priceMap[key]             = { chaosValue: l.primaryValue, icon, source: 'ex-Tattoo', detailsId: l.id };
+        priceMap[l.id.replace(/-/g,' ')] = priceMap[key]; // slug with spaces fallback
+      });
+      console.log(`[Tattoo] ex=${(exData.lines||[]).length} items=${(itemData.lines||[]).length}`);
+    } catch(e) { console.warn('[Tattoo]', e.message); }
+  })();
 
   await Promise.all([
     fetchStashItemType('UniqueWeapon'),

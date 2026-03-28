@@ -435,18 +435,19 @@ function getClusterJewelPrice(it){
 
   // ลอง match ด้วย bucket ก่อน
   const detailsId = `${statSlug}-${passives}-passives-${ilvlBucket}`;
+  const clusterBase = `${base}  ilv${ilvl} ${passives} Passives`;
+
   const entry = clusterMap[detailsId];
   if(entry){
     return {
       chaosValue: entry.chaosValue,
       icon: entry.icon,
       source: 'cluster',
-      displayName: `${statLine} ilv${ilvl} ${passives} passives`,
-      base,
+      displayName: statLine,
+      clusterBase,
     };
   }
 
-  // Fallback: stat slug + passives ใกล้เคียง bucket
   const fallback = Object.values(clusterMap).find(e =>
     e.passives === passives && nameToSlug(e.name) === statSlug
   );
@@ -455,12 +456,11 @@ function getClusterJewelPrice(it){
       chaosValue: fallback.chaosValue,
       icon: fallback.icon,
       source: 'cluster-approx',
-      displayName: `${statLine} ilv${ilvl} ${passives} passives`,
-      base,
+      displayName: statLine,
+      clusterBase,
     };
   }
 
-  // Loose fallback: stat slug only
   const looseFallback = Object.values(clusterMap).find(e =>
     nameToSlug(e.name) === statSlug
   );
@@ -469,8 +469,8 @@ function getClusterJewelPrice(it){
       chaosValue: looseFallback.chaosValue,
       icon: looseFallback.icon,
       source: 'cluster-loose',
-      displayName: `${statLine} ilv${ilvl} ${passives||'?'} passives`,
-      base,
+      displayName: statLine,
+      clusterBase,
     };
   }
   return null;
@@ -532,7 +532,7 @@ function getGemPrice(it, rawType){
 
   // Normalize lookup key:
   // level 1-19 → lookup level 1 (poe.ninja ไม่มีราคาสำหรับ level ต่ำ)
-  // quality 1-19 → lookup quality 0
+  // quality 0-19 → lookup quality 0
   const lookupLevel = gemLevel >= 20 ? gemLevel : 1;
   const lookupQual  = gemQuality >= 20 ? gemQuality : 0;
 
@@ -770,12 +770,13 @@ function processItems(items){
       // Inscribed Ultimatum → โชว์ reward/sacrifice
       finalName = pd.displayLabel;
     } else if(rawType.includes('Cluster Jewel') && pd && pd.displayName){
-      // Cluster Jewel → โชว์ enchant stat
       finalName = pd.displayName;
-      base = rawType;
+      base = pd.clusterBase || rawType;
     }
 
     const links = countLinks(it);
+    // Cluster Jewel ให้ใช้สี Normal เสมอ (ไม่ขึ้นกับ rarity จริง)
+    const displayRarity = rawType.includes('Cluster Jewel') ? 'Normal' : rarity;
 
     const chaosEach  = pd ? pd.chaosValue : null;
     const totalChaos = chaosEach !== null ? chaosEach * qty : null;
@@ -784,7 +785,7 @@ function processItems(items){
       base,
       typeLine: rawType,
       qty,
-      rarity,
+      rarity: displayRarity,
       tab: it._tabName || '',
       chaosEach,
       totalChaos,
