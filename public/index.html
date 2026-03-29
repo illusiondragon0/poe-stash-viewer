@@ -283,6 +283,7 @@ let tabsData    = [];
 let checkedTabs = new Set();
 let sortKey     = 'totalChaos';
 let realPrices  = {};   // rowKey → realPrice string ที่ user กรอก
+let staticIcons = {};   // stash type → imageUrl จาก PoE static API
 let sortDir     = -1;
 let divinePrice = 1;
 
@@ -301,6 +302,7 @@ async function init(){
   setStatus('กำลังโหลด Stash Tabs…','');
   // โหลด ninja และ tabs พร้อมกัน แต่รอทั้งคู่ก่อนแสดง tabs
   const ninjaPromise = loadNinjaPrices(league);
+  loadStaticIcons(); // โหลด stash tab icons จาก PoE
   try{
     const [res] = await Promise.all([
       fetch(`${API_BASE}/api/tabs?accountName=${enc(account)}&league=${enc(league)}&sessid=${enc(sessid)}`),
@@ -329,8 +331,14 @@ function renderSidebar(){
     const checked = checkedTabs.has(i);
     const icon = tabIcon(tab.type);
     const col = tab.colour ? `color:rgb(${tab.colour.r||200},${tab.colour.g||200},${tab.colour.b||200})` : '';
-    const tabImg = tab.srcC
-      ? `<img src="${escHtml(tab.srcC)}" class="tab-img" alt="${escHtml(tab.type||'')}"/>`
+    // ลอง static icon จาก PoE trade API ก่อน ถ้าไม่มีค่อยใช้ srcC
+    const typeKey = (tab.type||'').toLowerCase();
+    const staticUrl = staticIcons[typeKey]
+      || staticIcons['stashtab' + typeKey.replace('stash','')]
+      || staticIcons[typeKey.replace('stash','')];
+    const iconSrc = staticUrl || tab.srcC;
+    const tabImg = iconSrc
+      ? `<img src="${escHtml(iconSrc)}" class="tab-img" alt="${escHtml(tab.type||'')}"/>`
       : `<span class="tab-icon" style="${col}">${icon}</span>`;
     return `<div class="tab-item ${checked?'checked':''}" onclick="toggleTab(${i})" data-idx="${i}">
       ${tabImg}
@@ -385,10 +393,7 @@ async function loadSelected(){
   document.getElementById('progressWrap').style.display='block';
   document.getElementById('tableContainer').innerHTML='';
 
-  // โชว์ overlay ถ้า server ไม่ตอบใน 4 วินาที (Render กำลัง wake up)
-  const loadOverlayTimer = setTimeout(()=>{
-    document.getElementById('renderOverlay').classList.add('show');
-  }, 4000);
+
 
   let combined=[];
   for(let i=0;i<selected.length;i++){
@@ -409,8 +414,6 @@ async function loadSelected(){
     }
     if(i<selected.length-1) await sleep(300);
   }
-  clearTimeout(loadOverlayTimer);
-  document.getElementById('renderOverlay').classList.remove('show');
   setProgress(100);
   setTimeout(()=>{document.getElementById('progressWrap').style.display='none';setProgress(0);},500);
 
@@ -1059,6 +1062,25 @@ function doSort(key){
 }
 
 // ── NINJA ──
+async function loadStaticIcons(){
+  try{
+    const r = await fetch(`${API_BASE}/api/static-icons`);
+    if(!r.ok) return;
+    const data = await r.json();
+    // data.result = [{id, label, entries:[{id,text,image}]}]
+    (data.result||[]).forEach(group=>{
+      (group.entries||[]).forEach(e=>{
+        if(e.id && e.image){
+          staticIcons[e.id.toLowerCase()] = 'https://www.pathofexile.com' + e.image;
+        }
+      });
+    });
+    // render sidebar ใหม่ถ้า tabs โหลดแล้ว
+    if(tabsData.length) renderSidebar();
+    console.log('[static-icons] loaded', Object.keys(staticIcons).length);
+  }catch(e){ console.warn('[static-icons]', e.message); }
+}
+
 async function loadNinjaPrices(league){
   setBadge('loading','⏳ poe.ninja…');
   // โชว์ overlay ถ้า server ยังไม่ตอบใน 3 วินาที (Render กำลัง wake up)

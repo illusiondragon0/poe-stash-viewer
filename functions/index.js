@@ -44,35 +44,47 @@ app.get('/api/tabs', async (req, res) => {
 app.get('/api/stash', async (req, res) => {
   const { accountName, league, tabIndex, tabType, tabId, sessid } = req.query;
   if (!accountName || !sessid) return res.status(400).json({ error: 'missing params' });
-  // MapStash และ special tabs บางตัวต้องใช้ id แทน tabIndex
-  // และต้องส่ง &type= ด้วย
-  const ID_BASED_TABS = new Set(['MapStash']);
+
   const TYPE_TABS = new Set([
     'MapStash','GemStash','DivinationCardStash','EssenceStash','FragmentStash',
     'DelveStash','BlightStash','UltimatumStash','DeliriumStash',
     'UniqueStash','FlaskStash','MetamorphStash','HeistStash','CurrencyStash',
     'SocketableStash','RitualStash',
   ]);
-  let url = `https://www.pathofexile.com/character-window/get-stash-items`
+
+  const base = `https://www.pathofexile.com/character-window/get-stash-items`
     + `?accountName=${encodeURIComponent(accountName)}`
     + `&league=${encodeURIComponent(league || 'Mirage')}&tabs=0`;
-  // MapStash: ลอง id ก่อน ถ้า 404 fallback tabIndex
-  if (tabId && ID_BASED_TABS.has(tabType)) {
-    url += `&id=${encodeURIComponent(tabId)}`;
+
+  const typeParam = (tabType && TYPE_TABS.has(tabType)) ? `&type=${encodeURIComponent(tabType)}` : '';
+
+  // สร้าง URL หลายแบบ เรียงลำดับที่จะลอง
+  const urls = [];
+  if (tabType === 'MapStash' && tabId) {
+    // MapStash: ลองทุก parameter combination
+    urls.push(base + `&tabIndex=${tabIndex || 0}` + typeParam);
+    urls.push(base + `&id=${encodeURIComponent(tabId)}` + typeParam);
+    urls.push(base + `&tabIndex=${tabIndex || 0}`); // ไม่มี type
+    urls.push(base + `&id=${encodeURIComponent(tabId)}`); // ไม่มี type
   } else {
-    url += `&tabIndex=${tabIndex || 0}`;
+    urls.push(base + `&tabIndex=${tabIndex || 0}` + typeParam);
   }
-  if (tabType && TYPE_TABS.has(tabType)) {
-    url += `&type=${encodeURIComponent(tabType)}`;
+
+  let lastErr = '';
+  for (const url of urls) {
+    try {
+      const r = await fetch(url, { headers: POE_HEADERS(sessid) });
+      const text = await r.text();
+      console.log('[stash]', tabType||'normal', 'tabIndex:', tabIndex, 'status:', r.status, url.slice(-60));
+      if (r.ok) {
+        res.setHeader('Content-Type', 'application/json');
+        return res.send(text);
+      }
+      lastErr = text;
+      if (r.status !== 404) break; // ถ้าไม่ใช่ 404 ไม่ต้องลอง URL อื่น
+    } catch (e) { lastErr = e.message; break; }
   }
-  try {
-    const r = await fetch(url, { headers: POE_HEADERS(sessid) });
-    const text = await r.text();
-    console.log('[stash] tab', tabIndex, 'type:', tabType||'normal', 'status:', r.status);
-    if (!r.ok) return res.status(r.status).json({ error: `PoE API: ${r.status}`, body: text });
-    res.setHeader('Content-Type', 'application/json');
-    res.send(text);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  res.status(404).json({ error: 'PoE API: 404', body: lastErr });
 });
 
 // ── /api/ninja-prices ─────────────────────────────────────────────────────
@@ -483,3 +495,16 @@ app.get('/api/debug-item', async (req, res) => {
     res.json({ count: (data.items||[]).length, sample: items });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// ── /api/static-icons ─────────────────────────────────────────────────────
+app.get('/api/static-icons', async (req, res) => {
+  try {
+    const r = await fetch('https://www.pathofexile.com/api/trade/data/static', {
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
+    });
+    if (!r.ok) return res.status(r.status).json({ error: 'static API failed' });
+    const data = await r.json();
+    res.json(data);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
