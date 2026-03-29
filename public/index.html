@@ -44,7 +44,8 @@ body{font-family:'Noto Sans',sans-serif;background:var(--bg);color:var(--text);m
 .tab-item{display:flex;align-items:center;gap:8px;padding:6px 14px;cursor:pointer;border-radius:0;transition:background .1s;user-select:none}
 .tab-item:hover{background:var(--bg3)}
 .tab-item.checked{color:var(--gold)}
-.tab-item .tab-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.tab-item .tab-icon{font-size:16px;width:22px;text-align:center;flex-shrink:0}
+.tab-item .tab-img{width:22px;height:22px;object-fit:contain;flex-shrink:0;image-rendering:pixelated}
 .tab-item .tab-name{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tab-item .cb{width:16px;height:16px;border:2px solid var(--border);border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--bg3);transition:all .1s}
 .tab-item.checked .cb{background:var(--accent);border-color:var(--accent)}
@@ -323,11 +324,13 @@ async function init(){
 function renderSidebar(){
   const list = document.getElementById('tabList');
   list.innerHTML = tabsData.map((tab,i)=>{
+    // ซ่อน tab ที่ unavailable หรือซ่อน
+    if(tab.hidden || (tab.n||'').includes('Unavailable')) return '';
     const checked = checkedTabs.has(i);
     const icon = tabIcon(tab.type);
     const col = tab.colour ? `color:rgb(${tab.colour.r||200},${tab.colour.g||200},${tab.colour.b||200})` : '';
     const tabImg = tab.srcC
-      ? `<img src="${escHtml(tab.srcC)}" style="width:20px;height:20px;object-fit:contain;border-radius:2px;flex-shrink:0"/>`
+      ? `<img src="${escHtml(tab.srcC)}" class="tab-img" alt="${escHtml(tab.type||'')}"/>`
       : `<span class="tab-icon" style="${col}">${icon}</span>`;
     return `<div class="tab-item ${checked?'checked':''}" onclick="toggleTab(${i})" data-idx="${i}">
       ${tabImg}
@@ -382,6 +385,11 @@ async function loadSelected(){
   document.getElementById('progressWrap').style.display='block';
   document.getElementById('tableContainer').innerHTML='';
 
+  // โชว์ overlay ถ้า server ไม่ตอบใน 4 วินาที (Render กำลัง wake up)
+  const loadOverlayTimer = setTimeout(()=>{
+    document.getElementById('renderOverlay').classList.add('show');
+  }, 4000);
+
   let combined=[];
   for(let i=0;i<selected.length;i++){
     const idx=selected[i];
@@ -401,6 +409,8 @@ async function loadSelected(){
     }
     if(i<selected.length-1) await sleep(300);
   }
+  clearTimeout(loadOverlayTimer);
+  document.getElementById('renderOverlay').classList.remove('show');
   setProgress(100);
   setTimeout(()=>{document.getElementById('progressWrap').style.display='none';setProgress(0);},500);
 
@@ -726,10 +736,11 @@ function parseUltimatum(it){
     priceKey    = sacItem;
     rewardQty   = sacQty;
   } else if(rewardIsDouble) {
-    // "Doubles sacrificed Currency" → ได้ sacItem x (sacQty * 2)
-    displayName = `${sacItem} x${sacQty * 2}`;
+    // "Doubles sacrificed Currency" → ได้ sacItem กลับมา sacQty ชิ้น (เหมือนเดิม)
+    // "Doubles" = เพิ่มเป็น 2 เท่า แต่ sacQty คือจำนวนที่ต้องเสียไป ผู้เล่นได้คืน sacQty
+    displayName = `${sacItem} x${sacQty}`;
     priceKey    = sacItem;
-    rewardQty   = sacQty * 2;
+    rewardQty   = sacQty;
   } else {
     // Unique reward: reward text คือชื่อ item
     displayName = reward.trim();
@@ -852,7 +863,13 @@ function processItems(items){
     const displayName = rawName || rawType;
     // Only group if stackable and identical
     let gKey;
-    if(stackable){
+    if(isUltimatum){
+      // Ultimatum: group ด้วย reward displayName (Divine Orb x8 รวมกัน)
+      const uparsed = parseUltimatum(it);
+      gKey = uparsed && uparsed.displayName
+        ? `ulti||${uparsed.displayName}||${it._tabName||''}`
+        : `__nogroup__${Math.random()}`;
+    } else if(stackable){
       gKey = `${displayName.toLowerCase()}||${it._tabName||''}`;
     } else if(isCluster){
       // Cluster Jewel: group ด้วย enchant stat + passives + ilvl (ไม่สนชื่อ item หรือ rarity)

@@ -56,8 +56,9 @@ app.get('/api/stash', async (req, res) => {
   let url = `https://www.pathofexile.com/character-window/get-stash-items`
     + `?accountName=${encodeURIComponent(accountName)}`
     + `&league=${encodeURIComponent(league || 'Mirage')}&tabs=0`;
+  // MapStash: ลอง id ก่อน ถ้า 404 fallback tabIndex
   if (tabId && ID_BASED_TABS.has(tabType)) {
-    url += `&tabId=${encodeURIComponent(tabId)}`;
+    url += `&id=${encodeURIComponent(tabId)}`;
   } else {
     url += `&tabIndex=${tabIndex || 0}`;
   }
