@@ -75,13 +75,28 @@ app.get('/api/stash', async (req, res) => {
     try {
       const r = await fetch(url, { headers: POE_HEADERS(sessid) });
       const text = await r.text();
-      console.log('[stash]', tabType||'normal', 'tabIndex:', tabIndex, 'status:', r.status, url.slice(-60));
+      console.log('[stash]', tabType||'normal', 'tabIndex:', tabIndex, 'status:', r.status, '\nURL:', url, '\nbody:', text.slice(0,200));
       if (r.ok) {
+        // MapStash: items อาจอยู่ใน mapLayout แทน items array
+        // inject items จาก mapLayout ถ้า items ว่าง
+        try {
+          const parsed = JSON.parse(text);
+          if(tabType === 'MapStash' && (!parsed.items || !parsed.items.length) && parsed.mapLayout) {
+            const mapItems = Object.values(parsed.mapLayout).flatMap(tier =>
+              Array.isArray(tier) ? tier : (tier.items || [])
+            );
+            if(mapItems.length) {
+              parsed.items = mapItems;
+              res.setHeader('Content-Type', 'application/json');
+              return res.json(parsed);
+            }
+          }
+        } catch(e2) {}
         res.setHeader('Content-Type', 'application/json');
         return res.send(text);
       }
       lastErr = text;
-      if (r.status !== 404) break; // ถ้าไม่ใช่ 404 ไม่ต้องลอง URL อื่น
+      if (r.status !== 404) break;
     } catch (e) { lastErr = e.message; break; }
   }
   res.status(404).json({ error: 'PoE API: 404', body: lastErr });
