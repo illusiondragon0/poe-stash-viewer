@@ -326,8 +326,11 @@ function renderSidebar(){
     const checked = checkedTabs.has(i);
     const icon = tabIcon(tab.type);
     const col = tab.colour ? `color:rgb(${tab.colour.r||200},${tab.colour.g||200},${tab.colour.b||200})` : '';
+    const tabImg = tab.srcC
+      ? `<img src="${escHtml(tab.srcC)}" style="width:20px;height:20px;object-fit:contain;border-radius:2px;flex-shrink:0"/>`
+      : `<span class="tab-icon" style="${col}">${icon}</span>`;
     return `<div class="tab-item ${checked?'checked':''}" onclick="toggleTab(${i})" data-idx="${i}">
-      <span class="tab-icon" style="${col}">${icon}</span>
+      ${tabImg}
       <span class="tab-name">${escHtml(tab.n)}</span>
       <div class="cb"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>`;
@@ -386,7 +389,7 @@ async function loadSelected(){
     setStatus(`โหลด: ${tab.n} (${i+1}/${selected.length})…`,'');
     setProgress((i/selected.length)*100);
     try{
-      const res=await fetch(`${API_BASE}/api/stash?accountName=${enc(account)}&league=${enc(league)}&tabIndex=${idx}&tabType=${enc(tab.type||'')}&sessid=${enc(sessid)}`);
+      const res=await fetch(`${API_BASE}/api/stash?accountName=${enc(account)}&league=${enc(league)}&tabIndex=${idx}&tabType=${enc(tab.type||'')}&tabId=${enc(tab.id||'')}&sessid=${enc(sessid)}`);
       let data; try{data=await res.json();}catch{throw new Error('ไม่สามารถเชื่อมต่อ server');}
       if(!res.ok) throw new Error(data.error||`HTTP ${res.status}`);
       if(data.items) data.items.forEach(it=>{it._tabName=tab.n;it._tabType=tab.type;});

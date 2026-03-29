@@ -42,19 +42,26 @@ app.get('/api/tabs', async (req, res) => {
 
 // ── /api/stash ────────────────────────────────────────────────────────────
 app.get('/api/stash', async (req, res) => {
-  const { accountName, league, tabIndex, tabType, sessid } = req.query;
+  const { accountName, league, tabIndex, tabType, tabId, sessid } = req.query;
   if (!accountName || !sessid) return res.status(400).json({ error: 'missing params' });
-  // Special tab types ต้องส่ง &type= ด้วย เช่น MapStash, GemStash ฯลฯ
-  const SPECIAL_TABS = new Set([
-    'MapStash','GemStash','DivinationStash','EssenceStash','FragmentStash',
+  // MapStash และ special tabs บางตัวต้องใช้ id แทน tabIndex
+  // และต้องส่ง &type= ด้วย
+  const ID_BASED_TABS = new Set(['MapStash']);
+  const TYPE_TABS = new Set([
+    'MapStash','GemStash','DivinationCardStash','EssenceStash','FragmentStash',
     'DelveStash','BlightStash','UltimatumStash','DeliriumStash',
     'UniqueStash','FlaskStash','MetamorphStash','HeistStash','CurrencyStash',
+    'SocketableStash','RitualStash',
   ]);
   let url = `https://www.pathofexile.com/character-window/get-stash-items`
     + `?accountName=${encodeURIComponent(accountName)}`
-    + `&league=${encodeURIComponent(league || 'Mirage')}`
-    + `&tabIndex=${tabIndex || 0}&tabs=0`;
-  if (tabType && SPECIAL_TABS.has(tabType)) {
+    + `&league=${encodeURIComponent(league || 'Mirage')}&tabs=0`;
+  if (tabId && ID_BASED_TABS.has(tabType)) {
+    url += `&tabId=${encodeURIComponent(tabId)}`;
+  } else {
+    url += `&tabIndex=${tabIndex || 0}`;
+  }
+  if (tabType && TYPE_TABS.has(tabType)) {
     url += `&type=${encodeURIComponent(tabType)}`;
   }
   try {
