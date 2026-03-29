@@ -748,11 +748,11 @@ function parseUltimatum(it){
   let rewardQty   = 1;
 
   if(rewardIsDivCard) {
-    // "Doubles sacrificed Divination Cards" → ได้ sacQty ใบ
-    const divReward = sacQty;
-    displayName = `${sacItem} x${divReward}`;
+    // "Doubles sacrificed Divination Cards" → โชว์ตามที่ sacrifice จริง (sacQty ใบ)
+    // ราคา = sacQty × ราคาต่อใบ
+    displayName = sacQty > 1 ? `${sacItem} x${sacQty}` : sacItem;
     priceKey    = sacItem;
-    rewardQty   = divReward;
+    rewardQty   = sacQty;
   } else if(rewardIsDouble) {
     // "Doubles sacrificed Currency" → ได้ sacItem กลับมา sacQty ชิ้น (เหมือนเดิม)
     // "Doubles" = เพิ่มเป็น 2 เท่า แต่ sacQty คือจำนวนที่ต้องเสียไป ผู้เล่นได้คืน sacQty
