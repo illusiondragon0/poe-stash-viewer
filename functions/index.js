@@ -511,15 +511,5 @@ app.get('/api/debug-item', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── /api/static-icons ─────────────────────────────────────────────────────
-app.get('/api/static-icons', async (req, res) => {
-  try {
-    const r = await fetch('https://www.pathofexile.com/api/trade/data/static', {
-      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
-    });
-    if (!r.ok) return res.status(r.status).json({ error: 'static API failed' });
-    const data = await r.json();
-    res.json(data);
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
+// static-icons: removed, using hardcoded STASH_ICONS in client
 

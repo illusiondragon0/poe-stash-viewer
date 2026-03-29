@@ -106,6 +106,8 @@ td.qty-cell{color:var(--text);font-weight:600;font-size:13px}
 td.price-cell{color:#e8d890}
 td.total-cell{color:var(--gold2);font-weight:700}
 td.no-price{color:var(--text3);font-size:12px}
+tbody tr:nth-child(even){background:rgba(255,255,255,0.03)}
+tbody tr:hover{background:rgba(255,255,255,0.07)!important}
 td.real-price-cell{padding:4px 8px}
 td.real-price-cell input{width:90px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:3px 6px;border-radius:3px;font-size:12px;outline:none;text-align:right}
 td.real-price-cell input:focus{border-color:var(--accent)}
@@ -320,7 +322,6 @@ async function init(){
   setStatus('กำลังโหลด Stash Tabs…','');
   // โหลด ninja และ tabs พร้อมกัน แต่รอทั้งคู่ก่อนแสดง tabs
   const ninjaPromise = loadNinjaPrices(league);
-  loadStaticIcons(); // โหลด stash tab icons จาก PoE
   try{
     const [res] = await Promise.all([
       fetch(`${API_BASE}/api/tabs?accountName=${enc(account)}&league=${enc(league)}&sessid=${enc(sessid)}`),
@@ -777,13 +778,23 @@ function getPriceForItem(it){
   if(rawType === 'Inscribed Ultimatum' || rawName === 'Inscribed Ultimatum'){
     const parsed = parseUltimatum(it);
     if(parsed){
-      const priceKeyLower   = parsed.priceKey.toLowerCase();
-      const priceKeyNoApos  = priceKeyLower.replace(/'/g, '');
-      const bp = ninjaMap[priceKeyLower] || ninjaMap[priceKeyNoApos]
-              || stashNames[priceKeyLower]?.[0] || stashNames[priceKeyNoApos]?.[0];
+      const priceKeyLower  = parsed.priceKey.toLowerCase();
+      const priceKeyNoApos = priceKeyLower.replace(/'/g, '');
+
+      // สำหรับ unique reward: หา entry ที่ไม่มี links (no 5L/6L) ราคาถูกที่สุด
+      function findUniqueNoLink(key){
+        const entries = stashNames[key];
+        if(!entries || !entries.length) return null;
+        // หา entry links=0 ก่อน ถ้าไม่มีค่อยใช้ entry ที่ราคาถูกสุด (น่าจะ no-link)
+        const noLink = entries.find(e => !e.links || e.links === 0);
+        return noLink || entries[entries.length - 1]; // entry สุดท้าย = ราคาถูกสุด
+      }
+
+      const stashEntry = findUniqueNoLink(priceKeyLower) || findUniqueNoLink(priceKeyNoApos);
+      const bp = ninjaMap[priceKeyLower] || ninjaMap[priceKeyNoApos] || stashEntry;
       if(bp) {
         return {
-          chaosValue: (bp.chaosValue || bp.chaosValue) * parsed.rewardQty,
+          chaosValue: (bp.chaosValue) * parsed.rewardQty,
           icon: bp.icon,
           source: 'ultimatum',
           displayLabel: parsed.displayName,
@@ -1075,25 +1086,6 @@ function doSort(key){
 }
 
 // ── NINJA ──
-async function loadStaticIcons(){
-  try{
-    const r = await fetch(`${API_BASE}/api/static-icons`);
-    if(!r.ok) return;
-    const data = await r.json();
-    // data.result = [{id, label, entries:[{id,text,image}]}]
-    (data.result||[]).forEach(group=>{
-      (group.entries||[]).forEach(e=>{
-        if(e.id && e.image){
-          staticIcons[e.id.toLowerCase()] = 'https://www.pathofexile.com' + e.image;
-        }
-      });
-    });
-    // render sidebar ใหม่ถ้า tabs โหลดแล้ว
-    if(tabsData.length) renderSidebar();
-    console.log('[static-icons] loaded', Object.keys(staticIcons).length);
-  }catch(e){ console.warn('[static-icons]', e.message); }
-}
-
 async function loadNinjaPrices(league){
   setBadge('loading','⏳ poe.ninja…');
   // โชว์ overlay ถ้า server ยังไม่ตอบใน 3 วินาที (Render กำลัง wake up)
