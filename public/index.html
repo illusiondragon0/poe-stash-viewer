@@ -748,10 +748,11 @@ function parseUltimatum(it){
   let rewardQty   = 1;
 
   if(rewardIsDivCard) {
-    // "Doubles sacrificed Divination Cards" → แสดง sacrifice item x qty
-    displayName = qtyMatch ? `${sacItem} x${sacQty}` : sacItem;
+    // "Doubles sacrificed Divination Cards" → ได้ sacQty * 2 ใบ
+    const divReward = sacQty * 2;
+    displayName = `${sacItem} x${divReward}`;
     priceKey    = sacItem;
-    rewardQty   = sacQty;
+    rewardQty   = divReward;
   } else if(rewardIsDouble) {
     // "Doubles sacrificed Currency" → ได้ sacItem กลับมา sacQty ชิ้น (เหมือนเดิม)
     // "Doubles" = เพิ่มเป็น 2 เท่า แต่ sacQty คือจำนวนที่ต้องเสียไป ผู้เล่นได้คืน sacQty
@@ -790,8 +791,15 @@ function getPriceForItem(it){
         return noLink || entries[entries.length - 1]; // entry สุดท้าย = ราคาถูกสุด
       }
 
-      const stashEntry = findUniqueNoLink(priceKeyLower) || findUniqueNoLink(priceKeyNoApos);
-      const bp = ninjaMap[priceKeyLower] || ninjaMap[priceKeyNoApos] || stashEntry;
+      // DivinationCard: ราคาต่อใบจาก ninjaMap เท่านั้น (ไม่ใช้ stashEntry ที่อาจเป็น unique)
+      // Unique reward: ใช้ stashEntry (no-link) หรือ ninjaMap
+      let bp;
+      if(parsed.rewardIsDivCard){
+        bp = ninjaMap[priceKeyLower] || ninjaMap[priceKeyNoApos];
+      } else {
+        const stashEntry = findUniqueNoLink(priceKeyLower) || findUniqueNoLink(priceKeyNoApos);
+        bp = ninjaMap[priceKeyLower] || ninjaMap[priceKeyNoApos] || stashEntry;
+      }
       if(bp) {
         return {
           chaosValue: (bp.chaosValue) * parsed.rewardQty,
