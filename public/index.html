@@ -893,7 +893,8 @@ function processItems(items){
     const rarity  = getRarity(it);
     const isUltimatum = rawType === 'Inscribed Ultimatum';
     const isCluster   = rawType.includes('Cluster Jewel');
-    const stackable   = !isUltimatum && !isCluster &&
+    const isBeast     = !!(it.descrText && (it.descrText.includes('bestiary') || it.descrText.includes('Bestiary')));
+    const stackable   = !isUltimatum && !isCluster && !isBeast &&
       (rarity === 'Currency' || rarity === 'Divination' || rarity === 'Normal');
     const displayName = rawName || rawType;
     // Only group if stackable and identical
@@ -906,6 +907,10 @@ function processItems(items){
         : `__nogroup__${Math.random()}`;
     } else if(stackable){
       gKey = `${displayName.toLowerCase()}||${it._tabName||''}`;
+    } else if(isBeast){
+      // Beast: group ด้วย baseType (species) + tab
+      const beastBase = (it.baseType||'').replace(/<<[^>]*>>/g,'').trim() || rawType;
+      gKey = beastBase ? `beast||${beastBase.toLowerCase()}||${it._tabName||''}` : `__nogroup__${Math.random()}`;
     } else if(isCluster){
       // Cluster Jewel: group ด้วย enchant stat + passives + ilvl (ไม่สนชื่อ item หรือ rarity)
       const enc = it.enchantMods || [];
@@ -953,7 +958,11 @@ function processItems(items){
 
     // Override display name
     let finalName = displayName;
-    if(rarity === 'Gem'){
+    if(isBeast){
+      // Beast: โชว์ baseType (species) เช่น "Black Mórrigan" แทนชื่อ unique monster
+      finalName = (it.baseType||'').replace(/<<[^>]*>>/g,'').trim() || rawType;
+      base = ''; // ไม่ต้องโชว์ base ซ้ำ
+    } else if(rarity === 'Gem'){
       // Gem: ใช้ baseType ก่อน (hybrid gem มี typeLine=trigger แต่ baseType=ชื่อจริง)
       const rawBase = (it.baseType||'').replace(/<<[^>]*>>/g,'').trim();
       finalName = rawBase || rawType || displayName;
