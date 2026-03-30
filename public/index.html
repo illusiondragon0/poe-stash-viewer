@@ -951,6 +951,9 @@ function processItems(items){
     // Cluster Jewel: show enchant as name, base as jewel type
     let displayLabel = null;
 
+    // isBeast ต้องคำนวณใหม่ในลูปนี้ด้วย
+    const isBeast = !!(it.descrText && (it.descrText.includes('bestiary') || it.descrText.includes('Bestiary')));
+
     const pd = getPriceForItem(it);
     if(pd && pd.displayLabel) displayLabel = pd.displayLabel;
 
