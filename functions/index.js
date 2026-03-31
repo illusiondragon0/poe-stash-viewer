@@ -448,43 +448,72 @@ app.get('/api/ninja-prices', async (req, res) => {
         const icon     = iconBySlug[l.id] || iconByName[key] || null;
         // override ด้วย exchange price
         priceMap[key]             = { chaosValue: l.primaryValue, icon, source: 'ex-Tattoo', detailsId: l.id };
-        priceMap[l.id.replace(/-/g,' ')] = priceMap[key]; // slug with spaces fallback
+        priceMap[l.id.replace(/-/g,' ')] = priceMap[key];
       });
+
+      // fetch details สำหรับ Tattoo ที่ไม่มี icon (batch 5)
+      const tattooNoIcon = (exData.lines||[]).filter(l => {
+        const k = slugToName(l.id||'').toLowerCase();
+        return l.id && l.primaryValue != null && !priceMap[k]?.icon;
+      });
+      for(let i = 0; i < tattooNoIcon.length; i += 5){
+        const batch = tattooNoIcon.slice(i, i+5);
+        await Promise.all(batch.map(async l => {
+          try {
+            const dr = await fetch(
+              `${NINJA}/poe1/api/economy/exchange/current/details?league=${encodeURIComponent(lg)}&type=Tattoo&id=${encodeURIComponent(l.id)}`,
+              { headers: H }
+            );
+            if(dr.ok){
+              const dd = await dr.json();
+              if(dd.item?.image){
+                const k = slugToName(l.id).toLowerCase();
+                const iconUrl = `https://web.poecdn.com${dd.item.image}`;
+                if(priceMap[k]) priceMap[k].icon = iconUrl;
+              }
+            }
+          } catch(e2){}
+        }));
+      }
       console.log(`[Tattoo] ex=${(exData.lines||[]).length} items=${(itemData.lines||[]).length}`);
     } catch(e) { console.warn('[Tattoo]', e.message); }
   })();
 
-  // Astrolabe: exchange overview เหมือน Tattoo
+  // Astrolabe: exchange overview + details สำหรับ icon
   await (async () => {
     try {
-      const [exRes, itemRes] = await Promise.all([
-        fetch(`${NINJA}/poe1/api/economy/exchange/current/overview?league=${encodeURIComponent(lg)}&type=Astrolabe`, { headers: H }),
-        fetch(`${NINJA}/api/data/itemoverview?league=${encodeURIComponent(lg)}&type=Astrolabe`, { headers: H }),
-      ]);
-      const exData   = exRes.ok   ? await exRes.json()   : { lines: [] };
-      const itemData = itemRes.ok ? await itemRes.json() : { lines: [] };
+      const exRes = await fetch(
+        `${NINJA}/poe1/api/economy/exchange/current/overview?league=${encodeURIComponent(lg)}&type=Astrolabe`,
+        { headers: H }
+      );
+      const exData = exRes.ok ? await exRes.json() : { lines: [] };
+      const lines  = exData.lines || [];
 
-      const iconBySlug = {};
-      const iconByName = {};
-      (itemData.lines || []).forEach(line => {
-        if(line.name){
-          iconByName[line.name.toLowerCase()] = line.icon;
-          iconBySlug[nameToSlug(line.name)]   = line.icon;
-          if(!priceMap[line.name.toLowerCase()] && line.chaosValue){
-            priceMap[line.name.toLowerCase()] = { chaosValue: line.chaosValue, icon: line.icon||null, source: 'ov-Astrolabe' };
-          }
-        }
-      });
-
-      (exData.lines || []).forEach(l => {
-        if(!l.id || l.primaryValue == null) return;
-        const realName = slugToName(l.id);
-        const key      = realName.toLowerCase();
-        const icon     = iconBySlug[l.id] || iconByName[key] || null;
-        priceMap[key]             = { chaosValue: l.primaryValue, icon, source: 'ex-Astrolabe', detailsId: l.id };
-        priceMap[l.id.replace(/-/g,' ')] = priceMap[key];
-      });
-      console.log(`[Astrolabe] ex=${(exData.lines||[]).length} items=${(itemData.lines||[]).length}`);
+      // fetch details batch เพื่อเอา item.image (5 parallel)
+      for(let i = 0; i < lines.length; i += 5){
+        const batch = lines.slice(i, i + 5);
+        await Promise.all(batch.map(async l => {
+          if(!l.id || l.primaryValue == null) return;
+          const realName = slugToName(l.id);
+          const key      = realName.toLowerCase();
+          // ลอง fetch details เพื่อเอา icon
+          let icon = null;
+          try {
+            const dr = await fetch(
+              `${NINJA}/poe1/api/economy/exchange/current/details?league=${encodeURIComponent(lg)}&type=Astrolabe&id=${encodeURIComponent(l.id)}`,
+              { headers: H }
+            );
+            if(dr.ok){
+              const dd = await dr.json();
+              if(dd.item?.image) icon = `https://web.poecdn.com${dd.item.image}`;
+            }
+          } catch(e2) {}
+          const entry = { chaosValue: l.primaryValue, icon, source: 'ex-Astrolabe', detailsId: l.id };
+          priceMap[key]                    = entry;
+          priceMap[l.id.replace(/-/g,' ')] = entry;
+        }));
+      }
+      console.log(`[Astrolabe] ${lines.length} items`);
     } catch(e) { console.warn('[Astrolabe]', e.message); }
   })();
 
