@@ -413,10 +413,10 @@ app.get('/api/ninja-prices', async (req, res) => {
   await Promise.all([
     'Scarab','Oil','Essence','DeliriumOrb','DivinationCard',
     'Artifact','Fossil','Resonator','Omen',
-    'AllflameEmber','Runegraft','DjinnCoin','Astrolabe',
+    'AllflameEmber','Runegraft','DjinnCoin',
   ].map(fetchItemType));
 
-  // Tattoo: ใช้ exchange overview โดยตรง (id = slug, primaryValue = chaos rate)
+  // Tattoo + Astrolabe: ใช้ exchange overview โดยตรง (id = slug, primaryValue = chaos) (id = slug, primaryValue = chaos rate)
   await (async () => {
     try {
       const [exRes, itemRes] = await Promise.all([
@@ -452,6 +452,40 @@ app.get('/api/ninja-prices', async (req, res) => {
       });
       console.log(`[Tattoo] ex=${(exData.lines||[]).length} items=${(itemData.lines||[]).length}`);
     } catch(e) { console.warn('[Tattoo]', e.message); }
+  })();
+
+  // Astrolabe: exchange overview เหมือน Tattoo
+  await (async () => {
+    try {
+      const [exRes, itemRes] = await Promise.all([
+        fetch(`${NINJA}/poe1/api/economy/exchange/current/overview?league=${encodeURIComponent(lg)}&type=Astrolabe`, { headers: H }),
+        fetch(`${NINJA}/api/data/itemoverview?league=${encodeURIComponent(lg)}&type=Astrolabe`, { headers: H }),
+      ]);
+      const exData   = exRes.ok   ? await exRes.json()   : { lines: [] };
+      const itemData = itemRes.ok ? await itemRes.json() : { lines: [] };
+
+      const iconBySlug = {};
+      const iconByName = {};
+      (itemData.lines || []).forEach(line => {
+        if(line.name){
+          iconByName[line.name.toLowerCase()] = line.icon;
+          iconBySlug[nameToSlug(line.name)]   = line.icon;
+          if(!priceMap[line.name.toLowerCase()] && line.chaosValue){
+            priceMap[line.name.toLowerCase()] = { chaosValue: line.chaosValue, icon: line.icon||null, source: 'ov-Astrolabe' };
+          }
+        }
+      });
+
+      (exData.lines || []).forEach(l => {
+        if(!l.id || l.primaryValue == null) return;
+        const realName = slugToName(l.id);
+        const key      = realName.toLowerCase();
+        const icon     = iconBySlug[l.id] || iconByName[key] || null;
+        priceMap[key]             = { chaosValue: l.primaryValue, icon, source: 'ex-Astrolabe', detailsId: l.id };
+        priceMap[l.id.replace(/-/g,' ')] = priceMap[key];
+      });
+      console.log(`[Astrolabe] ex=${(exData.lines||[]).length} items=${(itemData.lines||[]).length}`);
+    } catch(e) { console.warn('[Astrolabe]', e.message); }
   })();
 
   await Promise.all([
