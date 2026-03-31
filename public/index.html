@@ -305,7 +305,8 @@ const STASH_ICONS = {
   'FragmentStash':      'https://web.poecdn.com/protected/image/layout/stash/fragment-tab-icon.png?v=1680235310830&key=NIXjytgKBeGX-0ed5uJWeA',
 };
 let sortDir     = -1;
-let divinePrice = 1;
+let divinePrice  = 1;
+let mirrorDivine = null;  // ราคา Mirror of Kalandra เป็น divine
 
 const TAB_ICONS = {
   CurrencyStash:'💰', MapStash:'🗺️', GemStash:'💎', DivinationStash:'🃏',
@@ -807,7 +808,14 @@ function getPriceForItem(it){
       }
       if(bp) {
         let cv = bp.chaosValue * parsed.rewardQty;
-        if(parsed.rewardMirrorHalf) cv = cv / 2;
+        if(parsed.rewardMirrorHalf){
+          // ใช้ mirrorDivine (divine) แทน chaos ถ้ามี
+          if(mirrorDivine && divinePrice > 1){
+            cv = (mirrorDivine / 2) * divinePrice; // แปลงจาก divine → chaos
+          } else {
+            cv = cv / 2;
+          }
+        }
         return {
           chaosValue: cv,
           icon: bp.icon,
@@ -1128,7 +1136,8 @@ async function loadNinjaPrices(league){
     stashItems  = data.stashItems|| {};
     stashNames  = data.stashNames|| {};
     clusterMap  = data.clusterMap|| {};
-    divinePrice = data.divinePrice || ninjaMap['divine orb']?.chaosValue || 1;
+    divinePrice  = data.divinePrice  || ninjaMap['divine orb']?.chaosValue || 1;
+    mirrorDivine = data.mirrorDivine || null;
     const cnt   = Object.keys(ninjaMap).length;
     const sn    = Object.keys(stashItems).length;
     setBadge('ok',`✓ poe.ninja ${cnt.toLocaleString()} + ${sn.toLocaleString()} variants · 1d=${Math.round(divinePrice)}c`);

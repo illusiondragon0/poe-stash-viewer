@@ -478,7 +478,22 @@ app.get('/api/ninja-prices', async (req, res) => {
   ].map(fetchItemOnly));
 
   const divinePrice = priceMap['divine orb']?.chaosValue || 1;
-  console.log(`[prices] done: ${Object.keys(priceMap).length} items, ${Object.keys(stashItemMap).length} variants, 1d=${divinePrice.toFixed(1)}c`);
+
+  // ดึงราคา Mirror of Kalandra เป็น divine จาก exchange details
+  let mirrorDivine = null;
+  try {
+    const mr = await fetch(
+      `${NINJA}/poe1/api/economy/exchange/current/details?league=${encodeURIComponent(lg)}&type=Currency&id=mirror-of-kalandra`,
+      { headers: H }
+    );
+    if(mr.ok){
+      const md = await mr.json();
+      const divPair = (md.pairs||[]).find(p => p.id === 'divine');
+      if(divPair && divPair.rate) mirrorDivine = divPair.rate;
+    }
+  } catch(e) { console.warn('[mirror]', e.message); }
+
+  console.log(`[prices] done: ${Object.keys(priceMap).length} items, ${Object.keys(stashItemMap).length} variants, 1d=${divinePrice.toFixed(1)}c, mirror=${mirrorDivine}d`);
 
   res.json({
     prices:     priceMap,
@@ -486,6 +501,7 @@ app.get('/api/ninja-prices', async (req, res) => {
     stashNames: stashNameMap,
     clusterMap,
     divinePrice,
+    mirrorDivine,
   });
 });
 
