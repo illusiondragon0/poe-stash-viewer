@@ -295,17 +295,26 @@ app.get('/api/ninja-prices', async (req, res) => {
         if (line.name) bySlug[nameToSlug(line.name)] = line;
       });
 
-      // Exchange-first
+      // Exchange-first: match หลายวิธี
       (exData.lines || []).forEach(line => {
         if (!line.id || line.primaryValue == null) return;
-        const item = byDetailsId[line.id] || bySlug[line.id] || bySlug[nameToSlug(slugToName(line.id))];
+        const item = byDetailsId[line.id]
+          || bySlug[line.id]
+          || bySlug[nameToSlug(slugToName(line.id))]
+          // Scarab: exchange id = "abyss-scarab-of-emptiness"
+          // itemoverview name = "Abyss Scarab of Emptiness" → slug matches
+          || bySlug[line.id.replace(/-scarab-/g,'-scarab-of-').replace(/^scarab-/,'')]
+          || null;
         if (!item) return;
-        priceMap[item.name.toLowerCase()] = {
+        const key = item.name.toLowerCase();
+        priceMap[key] = {
           chaosValue: line.primaryValue,
           icon: item.icon || null,
           source: `ex-${type}`,
           detailsId: line.id,
         };
+        // เก็บ slug key ด้วยเผื่อ match ด้วย typeLine
+        priceMap[line.id.replace(/-/g,' ')] = priceMap[key];
       });
 
       // Fallback: overview items ที่ไม่มีใน exchange
@@ -515,6 +524,42 @@ app.get('/api/ninja-prices', async (req, res) => {
       }
       console.log(`[Astrolabe] ${lines.length} items`);
     } catch(e) { console.warn('[Astrolabe]', e.message); }
+  })();
+
+  // Scarab: ดึงราคา + icon จาก exchange overview + details
+  await (async () => {
+    try {
+      const r = await fetch(
+        `${NINJA}/poe1/api/economy/exchange/current/overview?league=${encodeURIComponent(lg)}&type=Scarab`,
+        { headers: H }
+      );
+      if(!r.ok) return;
+      const data  = await r.json();
+      const lines = (data.lines||[]).filter(l => l.id && l.primaryValue != null);
+
+      // batch fetch details ทุกตัว เพื่อเอา item.name และ item.image จริง
+      for(let i = 0; i < lines.length; i += 8){
+        const batch = lines.slice(i, i+8);
+        await Promise.all(batch.map(async l => {
+          try {
+            const dr = await fetch(
+              `${NINJA}/poe1/api/economy/exchange/current/details?league=${encodeURIComponent(lg)}&type=Scarab&id=${encodeURIComponent(l.id)}`,
+              { headers: H }
+            );
+            if(!dr.ok) return;
+            const dd   = await dr.json();
+            const icon = dd.item?.image ? `https://web.poecdn.com${dd.item.image}` : null;
+            const name = dd.item?.name  || slugToName(l.id);
+            const key  = name.toLowerCase();
+            const entry = { chaosValue: l.primaryValue, icon, source: 'ex-Scarab', detailsId: l.id };
+            priceMap[key]                    = entry;
+            priceMap[key.replace(/'/g,'')]   = entry;
+            priceMap[l.id.replace(/-/g,' ')] = entry;
+          } catch(e2){}
+        }));
+      }
+      console.log(`[Scarab] ${lines.length} items with icons`);
+    } catch(e){ console.warn('[Scarab-icon]', e.message); }
   })();
 
   await Promise.all([
