@@ -739,34 +739,39 @@ function parseUltimatum(it){
   const sacItem  = qtyMatch ? qtyMatch[1].trim() : sacrifice.trim();
   const sacQty   = qtyMatch ? parseInt(qtyMatch[2]) : 1;
 
-  const rewardLower    = reward.toLowerCase();
-  const rewardIsDouble = rewardLower.includes('doubles');
+  const rewardLower     = reward.toLowerCase();
+  const rewardIsDouble  = rewardLower.includes('doubles');
   const rewardIsDivCard = rewardLower.includes('divination');
+  // "Item and Mirrored Copy" → Mirror Ultimatum → ราคา = Mirror of Kalandra / 2
+  const rewardIsMirror  = rewardLower.includes('mirrored copy');
 
   let displayName = '';
   let priceKey    = '';
   let rewardQty   = 1;
+  let rewardMirrorHalf = false;
 
-  if(rewardIsDivCard) {
-    // "Doubles sacrificed Divination Cards" → โชว์ตามที่ sacrifice จริง (sacQty ใบ)
-    // ราคา = sacQty × ราคาต่อใบ
+  if(rewardIsMirror) {
+    // Mirror Ultimatum: ราคา = Mirror of Kalandra ÷ 2
+    displayName      = 'Mirror Ultimatum';
+    priceKey         = 'mirror of kalandra';
+    rewardQty        = 1;
+    rewardMirrorHalf = true; // หาร 2
+  } else if(rewardIsDivCard) {
     displayName = sacQty > 1 ? `${sacItem} x${sacQty}` : sacItem;
     priceKey    = sacItem;
     rewardQty   = sacQty;
   } else if(rewardIsDouble) {
-    // "Doubles sacrificed Currency" → ได้ sacItem กลับมา sacQty ชิ้น (เหมือนเดิม)
-    // "Doubles" = เพิ่มเป็น 2 เท่า แต่ sacQty คือจำนวนที่ต้องเสียไป ผู้เล่นได้คืน sacQty
     displayName = `${sacItem} x${sacQty}`;
     priceKey    = sacItem;
     rewardQty   = sacQty;
   } else {
-    // Unique reward: reward text คือชื่อ item
+    // Unique reward
     displayName = reward.trim();
     priceKey    = reward.trim();
     rewardQty   = 1;
   }
 
-  return { displayName, priceKey, sacItem, sacQty, rewardQty, rewardIsDouble, rewardIsDivCard };
+  return { displayName, priceKey, sacItem, sacQty, rewardQty, rewardIsDouble, rewardIsDivCard, rewardMirrorHalf };
 }
 
 // ── Master price lookup ───────────────────────────────────────────────────
@@ -801,8 +806,10 @@ function getPriceForItem(it){
         bp = ninjaMap[priceKeyLower] || ninjaMap[priceKeyNoApos] || stashEntry;
       }
       if(bp) {
+        let cv = bp.chaosValue * parsed.rewardQty;
+        if(parsed.rewardMirrorHalf) cv = cv / 2;
         return {
-          chaosValue: (bp.chaosValue) * parsed.rewardQty,
+          chaosValue: cv,
           icon: bp.icon,
           source: 'ultimatum',
           displayLabel: parsed.displayName,
@@ -902,6 +909,7 @@ function processItems(items){
     if(isUltimatum){
       // Ultimatum: group ด้วย reward displayName (Divine Orb x8 รวมกัน)
       const uparsed = parseUltimatum(it);
+      // Mirror Ultimatum แต่ละชิ้นมีราคาเท่ากัน → group รวมได้
       gKey = uparsed && uparsed.displayName
         ? `ulti||${uparsed.displayName}||${it._tabName||''}`
         : `__nogroup__${Math.random()}`;
