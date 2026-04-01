@@ -320,26 +320,47 @@ function tabIcon(type){ return TAB_ICONS[type] || '📦'; }
 async function init(){
   const account = v('account'), sessid = v('sessid'), league = v('league');
   if(!account||!sessid){setStatus('กรุณากรอก Account และ POESESSID','error');return;}
+
+  // แสดง progress bar
+  const pw = document.getElementById('progressWrap');
+  pw.style.display = 'block';
+  setProgress(0);
   setStatus('กำลังโหลด Stash Tabs…','');
-  // โหลด ninja และ tabs พร้อมกัน แต่รอทั้งคู่ก่อนแสดง tabs
-  const ninjaPromise = loadNinjaPrices(league);
+
   try{
-    const [res] = await Promise.all([
-      fetch(`${API_BASE}/api/tabs?accountName=${enc(account)}&league=${enc(league)}&sessid=${enc(sessid)}`),
-      ninjaPromise,
-    ]);
-    let data; try{data=await res.json();}catch{throw new Error('ไม่สามารถเชื่อมต่อ server');}
-    if(!res.ok) throw new Error(data.error||`HTTP ${res.status}`);
+    // Step 1: โหลด tabs (0→40%)
+    setStatus('กำลังดึงข้อมูล Tabs…','');
+    const tabsRes = await fetch(`${API_BASE}/api/tabs?accountName=${enc(account)}&league=${enc(league)}&sessid=${enc(sessid)}`);
+    let data; try{data=await tabsRes.json();}catch{throw new Error('ไม่สามารถเชื่อมต่อ server');}
+    if(!tabsRes.ok) throw new Error(data.error||`HTTP ${tabsRes.status}`);
     if(!data.tabs?.length) throw new Error('ไม่พบ Stash Tab');
+    setProgress(40);
+
+    // Step 2: โหลด ninja prices (40→100%) — animate progress ระหว่างรอ
+    setStatus('กำลังโหลดราคา poe.ninja…','');
+    let fakeP = 40;
+    const fakeTimer = setInterval(()=>{
+      if(fakeP < 90){ fakeP += 2; setProgress(fakeP); }
+    }, 300);
+
+    await loadNinjaPrices(league);
+    clearInterval(fakeTimer);
+    setProgress(100);
+
+    // แสดงผล
     tabsData = data.tabs;
     renderSidebar();
-    loadTrackedTabs(); // โหลด tabs ที่เคยเลือกไว้
-    renderSidebar();   // render ใหม่พร้อม checked state
+    loadTrackedTabs();
+    renderSidebar();
     document.getElementById('sidebarActions').style.display='flex';
     document.getElementById('btnLoad').style.display='block';
     document.getElementById('btnLoad').disabled = checkedTabs.size===0;
     setStatus(`พบ ${data.tabs.length} tabs — เลือก tab แล้วกด Load Items`,'success');
-  }catch(e){setStatus(`⚠ ${e.message}`,'error');}
+  }catch(e){
+    setStatus(`⚠ ${e.message}`,'error');
+  }finally{
+    setTimeout(()=>{ document.getElementById('progressWrap').style.display='none'; setProgress(0); }, 600);
+  }
 }
 
 // ── SIDEBAR ──
@@ -996,12 +1017,14 @@ function processItems(items){
       finalName = rawBase || rawType || displayName;
     }
     if(rarity === 'Gem' && pd && pd.gemBase){
-      // Gem: ชื่อ gem ไปอยู่บรรทัดแรก, level/quality บรรทัดสอง (base)
-      // finalName ถูก set แล้วข้างบน ไม่ต้อง override
       base = pd.gemBase;
     } else if(pd && pd.displayLabel){
-      // Inscribed Ultimatum → โชว์ reward/sacrifice
+      // Inscribed Ultimatum → โชว์ reward/sacrifice (มีราคา)
       finalName = pd.displayLabel;
+    } else if(rawType === 'Inscribed Ultimatum'){
+      // Inscribed Ultimatum ที่หาราคาไม่เจอ → ยังต้อง parse ชื่อจาก properties
+      const uparsed2 = parseUltimatum(it);
+      if(uparsed2 && uparsed2.displayName) finalName = uparsed2.displayName;
     } else if(rawType.includes('Cluster Jewel') && pd && pd.displayName){
       finalName = pd.displayName;
       base = pd.clusterBase || rawType;
