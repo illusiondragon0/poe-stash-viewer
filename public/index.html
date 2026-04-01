@@ -953,6 +953,15 @@ function processItems(items){
   });
   items = Object.values(groupMap);
 
+  // ซ่อน shard items ที่ไม่ต้องโชว์
+  const HIDDEN_ITEMS = new Set([
+    'alteration shard', 'transmutation shard', 'alchemy shard',
+  ]);
+  items = items.filter(it => {
+    const name = ((it.typeLine||'') + (it.name||'')).replace(/<<[^>]*>>/g,'').trim().toLowerCase();
+    return !HIDDEN_ITEMS.has(name);
+  });
+
   let missCount = 0;
   allItems = items.map(it => {
     const rawName = (it.name||'').replace(/<<[^>]*>>/g,'').trim();
