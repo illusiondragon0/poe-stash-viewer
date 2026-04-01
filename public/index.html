@@ -143,16 +143,6 @@ td.tab-cell{color:var(--text2);font-size:12px}
 .empty{text-align:center;padding:60px 20px;color:var(--text3)}
 .empty .ico{font-size:40px;opacity:.3;margin-bottom:12px}
 
-/* ── RENDER WAKEUP OVERLAY ── */
-#renderOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;
-  flex-direction:column;align-items:center;justify-content:center;gap:16px}
-#renderOverlay.show{display:flex}
-.render-spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);
-  border-radius:50%;animation:spin 1s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.render-msg{color:var(--text);font-size:15px;text-align:center;line-height:1.6}
-.render-msg small{color:var(--text2);font-size:12px}
-
 /* ── SCROLLBAR ── */
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:var(--bg2)}
@@ -167,15 +157,6 @@ td.tab-cell{color:var(--text2);font-size:12px}
 </style>
 </head>
 <body>
-
-<!-- RENDER WAKEUP OVERLAY -->
-<div id="renderOverlay">
-  <div class="render-spinner"></div>
-  <div class="render-msg">
-    กำลังปลุก server...<br>
-    <small>Render free tier จะ sleep เมื่อไม่มีผู้ใช้<br>รอประมาณ 30-60 วินาที</small>
-  </div>
-</div>
 
 <!-- TOP BAR -->
 <div class="topbar">
@@ -1156,10 +1137,6 @@ function doSort(key){
 // ── NINJA ──
 async function loadNinjaPrices(league){
   setBadge('loading','⏳ poe.ninja…');
-  // โชว์ overlay ถ้า server ยังไม่ตอบใน 3 วินาที (Render กำลัง wake up)
-  const overlayTimer = setTimeout(()=>{
-    document.getElementById('renderOverlay').classList.add('show');
-  }, 3000);
   try{
     const res=await fetch(`${API_BASE}/api/ninja-prices?league=${enc(league)}`);
     if(!res.ok)throw new Error(`HTTP ${res.status}`);
@@ -1175,10 +1152,7 @@ async function loadNinjaPrices(league){
     setBadge('ok',`✓ poe.ninja ${cnt.toLocaleString()} + ${sn.toLocaleString()} variants · 1d=${Math.round(divinePrice)}c`);
     if(allItems.length){renderTable();updateWealth();}
   }catch(e){console.error(e);setBadge('error','✗ poe.ninja ล้มเหลว');}
-  finally{
-    clearTimeout(overlayTimer);
-    document.getElementById('renderOverlay').classList.remove('show');
-  }
+
 }
 
 function setBadge(s,t){
