@@ -420,7 +420,7 @@ app.get('/api/ninja-prices', async (req, res) => {
   ]);
 
   await Promise.all([
-    'Scarab','Oil','Essence','DeliriumOrb','DivinationCard',
+    'Oil','Essence','DeliriumOrb','DivinationCard',
     'Artifact','Fossil','Resonator','Omen',
     'AllflameEmber','Runegraft','DjinnCoin',
   ].map(fetchItemType));
@@ -526,7 +526,8 @@ app.get('/api/ninja-prices', async (req, res) => {
     } catch(e) { console.warn('[Astrolabe]', e.message); }
   })();
 
-  // Scarab: ดึงราคา + icon จาก exchange overview + details
+  // Scarab: ดึงราคา + icon จาก exchange overview → details
+  // รัน AFTER fetchItemType เพื่อ override ราคาจาก itemoverview ด้วยราคา exchange จริง
   await (async () => {
     try {
       const r = await fetch(
@@ -537,7 +538,7 @@ app.get('/api/ninja-prices', async (req, res) => {
       const data  = await r.json();
       const lines = (data.lines||[]).filter(l => l.id && l.primaryValue != null);
 
-      // batch fetch details ทุกตัว เพื่อเอา item.name และ item.image จริง
+      // batch fetch details เพื่อเอา item.name จริงและ icon
       for(let i = 0; i < lines.length; i += 8){
         const batch = lines.slice(i, i+8);
         await Promise.all(batch.map(async l => {
@@ -551,15 +552,18 @@ app.get('/api/ninja-prices', async (req, res) => {
             const icon = dd.item?.image ? `https://web.poecdn.com${dd.item.image}` : null;
             const name = dd.item?.name  || slugToName(l.id);
             const key  = name.toLowerCase();
+            const keyNoAp = key.replace(/'/g,'');
+            const keySlug = l.id.replace(/-/g,' ');
+            // Override เสมอ — exchange rate แม่นกว่า itemoverview
             const entry = { chaosValue: l.primaryValue, icon, source: 'ex-Scarab', detailsId: l.id };
-            priceMap[key]                    = entry;
-            priceMap[key.replace(/'/g,'')]   = entry;
-            priceMap[l.id.replace(/-/g,' ')] = entry;
+            priceMap[key]      = entry;
+            priceMap[keyNoAp]  = entry;
+            priceMap[keySlug]  = entry;
           } catch(e2){}
         }));
       }
-      console.log(`[Scarab] ${lines.length} items with icons`);
-    } catch(e){ console.warn('[Scarab-icon]', e.message); }
+      console.log(`[Scarab] ${lines.length} items overridden with exchange rates`);
+    } catch(e){ console.warn('[Scarab]', e.message); }
   })();
 
   await Promise.all([
