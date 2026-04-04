@@ -1027,7 +1027,7 @@ function processItems(items){
       tab: it._tabName || '',
       chaosEach,
       totalChaos,
-      icon: pd?.icon || null,
+      icon: pd?.icon || it.icon || null,  // fallback ใช้ icon จาก stash API
       links,
       corrupted: it.corrupted || false,
     };
