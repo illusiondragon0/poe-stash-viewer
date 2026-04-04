@@ -526,43 +526,64 @@ app.get('/api/ninja-prices', async (req, res) => {
     } catch(e) { console.warn('[Astrolabe]', e.message); }
   })();
 
-  // Scarab: ดึงราคา + icon จาก exchange overview → details
-  // รัน AFTER fetchItemType เพื่อ override ราคาจาก itemoverview ด้วยราคา exchange จริง
+  // Scarab: Step 1 — ดึงราคาจาก exchange overview ก่อน (เร็ว, ไม่ต้อง fetch รายตัว)
+  // Step 2 — fetch details เฉพาะตัวที่ไม่มี icon (lazy, ไม่บล็อก response)
   await (async () => {
     try {
-      const r = await fetch(
-        `${NINJA}/poe1/api/economy/exchange/current/overview?league=${encodeURIComponent(lg)}&type=Scarab`,
-        { headers: H }
-      );
-      if(!r.ok) return;
-      const data  = await r.json();
-      const lines = (data.lines||[]).filter(l => l.id && l.primaryValue != null);
+      const [exRes, itemRes] = await Promise.all([
+        fetch(`${NINJA}/poe1/api/economy/exchange/current/overview?league=${encodeURIComponent(lg)}&type=Scarab`, { headers: H }),
+        fetch(`${NINJA}/api/data/itemoverview?league=${encodeURIComponent(lg)}&type=Scarab`, { headers: H }),
+      ]);
+      const exData   = exRes.ok   ? await exRes.json()   : { lines: [] };
+      const itemData = itemRes.ok ? await itemRes.json() : { lines: [] };
 
-      // batch fetch details เพื่อเอา item.name จริงและ icon
-      for(let i = 0; i < lines.length; i += 8){
-        const batch = lines.slice(i, i+8);
-        await Promise.all(batch.map(async l => {
-          try {
-            const dr = await fetch(
-              `${NINJA}/poe1/api/economy/exchange/current/details?league=${encodeURIComponent(lg)}&type=Scarab&id=${encodeURIComponent(l.id)}`,
-              { headers: H }
-            );
-            if(!dr.ok) return;
-            const dd   = await dr.json();
-            const icon = dd.item?.image ? `https://web.poecdn.com${dd.item.image}` : null;
-            const name = dd.item?.name  || slugToName(l.id);
-            const key  = name.toLowerCase();
-            const keyNoAp = key.replace(/'/g,'');
-            const keySlug = l.id.replace(/-/g,' ');
-            // Override เสมอ — exchange rate แม่นกว่า itemoverview
-            const entry = { chaosValue: l.primaryValue, icon, source: 'ex-Scarab', detailsId: l.id };
-            priceMap[key]      = entry;
-            priceMap[keyNoAp]  = entry;
-            priceMap[keySlug]  = entry;
-          } catch(e2){}
-        }));
-      }
-      console.log(`[Scarab] ${lines.length} items overridden with exchange rates`);
+      // icon map จาก itemoverview
+      const iconMap = {};
+      (itemData.lines||[]).forEach(l => {
+        if(l.name && l.icon) iconMap[l.name.toLowerCase()] = l.icon;
+      });
+
+      // Step 1: ใส่ราคา exchange + icon จาก itemoverview ทุกตัวพร้อมกัน
+      (exData.lines||[]).forEach(l => {
+        if(!l.id || l.primaryValue == null) return;
+        const name    = slugToName(l.id);
+        const key     = name.toLowerCase();
+        const keyNoAp = key.replace(/'/g,'');
+        const keySlug = l.id.replace(/-/g,' ');
+        const icon    = iconMap[key] || iconMap[keyNoAp] || null;
+        const entry   = { chaosValue: l.primaryValue, icon, source: 'ex-Scarab', detailsId: l.id };
+        priceMap[key]      = entry;
+        priceMap[keyNoAp]  = entry;
+        priceMap[keySlug]  = entry;
+      });
+      console.log(`[Scarab] ${(exData.lines||[]).length} items priced`);
+
+      // Step 2: fetch details เฉพาะที่ icon ยังว่าง (background, ไม่ await)
+      const noIcon = (exData.lines||[]).filter(l => {
+        if(!l.id) return false;
+        const k = slugToName(l.id).toLowerCase();
+        return !priceMap[k]?.icon;
+      });
+      (async () => {
+        for(let i = 0; i < noIcon.length; i += 8){
+          const batch = noIcon.slice(i, i+8);
+          await Promise.all(batch.map(async l => {
+            try {
+              const dr = await fetch(
+                `${NINJA}/poe1/api/economy/exchange/current/details?league=${encodeURIComponent(lg)}&type=Scarab&id=${encodeURIComponent(l.id)}`,
+                { headers: H }
+              );
+              if(!dr.ok) return;
+              const dd   = await dr.json();
+              if(!dd.item?.image) return;
+              const icon    = `https://web.poecdn.com${dd.item.image}`;
+              const name    = dd.item.name || slugToName(l.id);
+              const key     = name.toLowerCase();
+              if(priceMap[key]) priceMap[key].icon = icon;
+            } catch(e2){}
+          }));
+        }
+      })(); // fire and forget
     } catch(e){ console.warn('[Scarab]', e.message); }
   })();
 
