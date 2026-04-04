@@ -1003,10 +1003,12 @@ function processItems(items){
     } else if(pd && pd.displayLabel){
       // Inscribed Ultimatum → โชว์ reward/sacrifice (มีราคา)
       finalName = pd.displayLabel;
+      if(rawType === 'Inscribed Ultimatum') base = 'Inscribed Ultimatum';
     } else if(rawType === 'Inscribed Ultimatum'){
       // Inscribed Ultimatum ที่หาราคาไม่เจอ → ยังต้อง parse ชื่อจาก properties
       const uparsed2 = parseUltimatum(it);
       if(uparsed2 && uparsed2.displayName) finalName = uparsed2.displayName;
+      base = 'Inscribed Ultimatum';
     } else if(rawType.includes('Cluster Jewel') && pd && pd.displayName){
       finalName = pd.displayName;
       base = pd.clusterBase || rawType;
