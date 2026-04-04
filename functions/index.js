@@ -526,7 +526,8 @@ app.get('/api/ninja-prices', async (req, res) => {
     } catch(e) { console.warn('[Astrolabe]', e.message); }
   })();
 
-  // Scarab: exchange overview primaryValue = chaos rate โดยตรง (เร็ว ไม่ต้อง fetch details)
+  // Scarab: details API → item.name จริง + pairs[chaos].rate
+  // overview ก่อนเพื่อเอา id list, แล้ว details batch เพื่อ name+rate
   await (async () => {
     try {
       const exRes = await fetch(
@@ -535,23 +536,36 @@ app.get('/api/ninja-prices', async (req, res) => {
       );
       if(!exRes.ok) return;
       const exData = await exRes.json();
-      // primary = "chaos" → primaryValue คือราคาเป็น chaos โดยตรง
-      const isPrimChaos = (exData.core?.primary === 'chaos');
-      let count = 0;
-      (exData.lines||[]).forEach(l => {
-        if(!l.id || l.primaryValue == null) return;
-        const chaos = isPrimChaos ? l.primaryValue : (l.primaryValue * (exData.core?.rates?.divine || 1));
-        const name    = slugToName(l.id);
-        const key     = name.toLowerCase();
-        const keyNoAp = key.replace(/'/g,'');
-        const keySlug = l.id.replace(/-/g,' ');
-        const entry   = { chaosValue: chaos, icon: null, source: 'ex-Scarab', detailsId: l.id };
-        priceMap[key]      = entry;
-        priceMap[keyNoAp]  = entry;
-        priceMap[keySlug]  = entry;
-        count++;
-      });
-      console.log(`[Scarab] ${count} items priced (primaryValue chaos)`);
+      const lines  = (exData.lines||[]).filter(l => l.id);
+
+      // batch 15 parallel — fetch details เพื่อเอา item.name จริง
+      for(let i = 0; i < lines.length; i += 15){
+        const batch = lines.slice(i, i+15);
+        await Promise.all(batch.map(async l => {
+          try {
+            const dr = await fetch(
+              `${NINJA}/poe1/api/economy/exchange/current/details?league=${encodeURIComponent(lg)}&type=Scarab&id=${encodeURIComponent(l.id)}`,
+              { headers: H }
+            );
+            if(!dr.ok) return;
+            const dd   = await dr.json();
+            const rate = (dd.pairs||[]).find(p => p.id==='chaos')?.rate;
+            if(rate == null) return;
+            const name    = dd.item?.name || slugToName(l.id);
+            const icon    = dd.item?.image ? `https://web.poecdn.com${dd.item.image}` : null;
+            const key     = name.toLowerCase();
+            const keyNoAp = key.replace(/'/g,'');
+            const keySlug = l.id.replace(/-/g,' ');
+            const slugName = slugToName(l.id).toLowerCase();
+            const entry   = { chaosValue: rate, icon, source: 'ex-Scarab', detailsId: l.id };
+            priceMap[key]      = entry;
+            priceMap[keyNoAp]  = entry;
+            priceMap[keySlug]  = entry;
+            priceMap[slugName] = entry; // fallback ด้วย slugToName
+          } catch(e2){}
+        }));
+      }
+      console.log(`[Scarab] ${lines.length} items from details`);
     } catch(e){ console.warn('[Scarab]', e.message); }
   })();
 

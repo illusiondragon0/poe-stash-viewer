@@ -799,11 +799,14 @@ function getPriceForItem(it){
         return noLink || entries[entries.length - 1]; // entry สุดท้าย = ราคาถูกสุด
       }
 
-      // DivinationCard: ราคาต่อใบจาก ninjaMap เท่านั้น (ไม่ใช้ stashEntry ที่อาจเป็น unique)
-      // Unique reward: ใช้ stashEntry (no-link) หรือ ninjaMap
+      // DivinationCard: ใช้เฉพาะ entry ที่มา source DivinationCard
+      // ป้องกัน "The Ethereal" ไปดึงราคา unique item แทน
       let bp;
       if(parsed.rewardIsDivCard){
-        bp = ninjaMap[priceKeyLower] || ninjaMap[priceKeyNoApos];
+        // หา entry ที่แน่ใจว่าเป็น DivinationCard (source มี 'DivinationCard' หรือ 'ex-DivinationCard')
+        const candidates = [ninjaMap[priceKeyLower], ninjaMap[priceKeyNoApos]].filter(Boolean);
+        bp = candidates.find(e => e.source && (e.source.includes('Divination') || e.source.includes('divination')))
+          || candidates[0]; // fallback อันแรก
       } else {
         const stashEntry = findUniqueNoLink(priceKeyLower) || findUniqueNoLink(priceKeyNoApos);
         bp = ninjaMap[priceKeyLower] || ninjaMap[priceKeyNoApos] || stashEntry;
