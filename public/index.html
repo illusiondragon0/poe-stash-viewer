@@ -288,6 +288,7 @@ const STASH_ICONS = {
 let sortDir     = -1;
 let divinePrice  = 1;
 let mirrorDivine = null;  // ราคา Mirror of Kalandra เป็น divine
+let scarabMap    = {};   // scarab name.lower → { chaosValue, icon }
 
 const TAB_ICONS = {
   CurrencyStash:'💰', MapStash:'🗺️', GemStash:'💎', DivinationStash:'🃏',
@@ -327,6 +328,7 @@ async function init(){
     await loadNinjaPrices(league);
     clearInterval(fakeTimer);
     setProgress(100);
+    loadScarabPrices(league); // โหลด Scarab แยก (background ไม่ block UI)
 
     // แสดงผล
     tabsData = data.tabs;
@@ -893,8 +895,15 @@ function getPriceForItem(it){
     return ninjaMap[rawName.toLowerCase()] || null;
   }
 
-  // 5. Currency / Fragment / Normal items — use exchange-first ninjaMap
-  // ลอง key ทั้งแบบมี apostrophe (Rogue's Marker) และไม่มี (rogues marker)
+  // 5. Scarab — ใช้ scarabMap ก่อน (ราคาจาก details API แม่นกว่า)
+  if(rawType.toLowerCase().includes('scarab')){
+    const sk = rawType.toLowerCase();
+    const skNoAp = sk.replace(/'/g,'');
+    const sp = scarabMap[sk] || scarabMap[skNoAp];
+    if(sp) return { chaosValue: sp.chaosValue, icon: sp.icon || it.icon || null, source: 'scarab' };
+  }
+
+  // 6. Currency / Fragment / Normal items — use exchange-first ninjaMap
   const rtKey  = rawType.toLowerCase();
   const rnKey  = rawName.toLowerCase();
   const rtNoAp = rtKey.replace(/'/g, '');
@@ -1141,6 +1150,19 @@ function doSort(key){
 }
 
 // ── NINJA ──
+async function loadScarabPrices(league){
+  try{
+    const res = await fetch(`${API_BASE}/api/scarab-prices?league=${enc(league)}`);
+    if(!res.ok) return;
+    const data = await res.json();
+    scarabMap = data || {};
+    const cnt = Object.keys(scarabMap).length;
+    console.log(`[scarab] loaded ${cnt} entries`);
+    // rerender ถ้ามี items อยู่แล้ว
+    if(allItems.length){ renderTable(); updateWealth(); }
+  }catch(e){ console.warn('[scarab]', e.message); }
+}
+
 async function loadNinjaPrices(league){
   setBadge('loading','⏳ poe.ninja…');
   try{

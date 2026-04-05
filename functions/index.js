@@ -526,49 +526,6 @@ app.get('/api/ninja-prices', async (req, res) => {
     } catch(e) { console.warn('[Astrolabe]', e.message); }
   })();
 
-  // Scarab: details API → item.name จริง + pairs[chaos].rate
-  // overview ก่อนเพื่อเอา id list, แล้ว details batch เพื่อ name+rate
-  await (async () => {
-    try {
-      const exRes = await fetch(
-        `${NINJA}/poe1/api/economy/exchange/current/overview?league=${encodeURIComponent(lg)}&type=Scarab`,
-        { headers: H }
-      );
-      if(!exRes.ok) return;
-      const exData = await exRes.json();
-      const lines  = (exData.lines||[]).filter(l => l.id);
-
-      // batch 15 parallel — fetch details เพื่อเอา item.name จริง
-      for(let i = 0; i < lines.length; i += 15){
-        const batch = lines.slice(i, i+15);
-        await Promise.all(batch.map(async l => {
-          try {
-            const dr = await fetch(
-              `${NINJA}/poe1/api/economy/exchange/current/details?league=${encodeURIComponent(lg)}&type=Scarab&id=${encodeURIComponent(l.id)}`,
-              { headers: H }
-            );
-            if(!dr.ok) return;
-            const dd   = await dr.json();
-            const rate = (dd.pairs||[]).find(p => p.id==='chaos')?.rate;
-            if(rate == null) return;
-            const name    = dd.item?.name || slugToName(l.id);
-            const icon    = dd.item?.image ? `https://web.poecdn.com${dd.item.image}` : null;
-            const key     = name.toLowerCase();
-            const keyNoAp = key.replace(/'/g,'');
-            const keySlug = l.id.replace(/-/g,' ');
-            const slugName = slugToName(l.id).toLowerCase();
-            const entry   = { chaosValue: rate, icon, source: 'ex-Scarab', detailsId: l.id };
-            priceMap[key]      = entry;
-            priceMap[keyNoAp]  = entry;
-            priceMap[keySlug]  = entry;
-            priceMap[slugName] = entry; // fallback ด้วย slugToName
-          } catch(e2){}
-        }));
-      }
-      console.log(`[Scarab] ${lines.length} items from details`);
-    } catch(e){ console.warn('[Scarab]', e.message); }
-  })();
-
   await Promise.all([
     fetchStashItemType('UniqueWeapon'),
     fetchStashItemType('UniqueArmour'),
@@ -622,6 +579,58 @@ app.get('/api/ninja-prices', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Ready on port ${PORT}`));
+
+// ── /api/scarab-prices ────────────────────────────────────────────────────
+// endpoint แยก เพื่อไม่บล็อก ninja-prices (Scarab มี 300+ ตัว ต้อง fetch details ทุกตัว)
+app.get('/api/scarab-prices', async (req, res) => {
+  const lg = req.query.league || 'Mirage';
+  const H2 = { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' };
+  const result = {};
+
+  function slugToName2(slug) {
+    const SMALL = new Set(['of','the','and','in','a','an','to','for','with','on','at','from','by','or']);
+    return slug.split('-').map((w,i) =>
+      (i===0||!SMALL.has(w)) ? w.charAt(0).toUpperCase()+w.slice(1) : w
+    ).join(' ');
+  }
+
+  try {
+    const exRes = await fetch(
+      `https://poe.ninja/poe1/api/economy/exchange/current/overview?league=${encodeURIComponent(lg)}&type=Scarab`,
+      { headers: H2 }
+    );
+    if(!exRes.ok) return res.json(result);
+    const exData = await exRes.json();
+    const lines  = (exData.lines||[]).filter(l => l.id);
+    console.log(`[scarab-prices] fetching ${lines.length} details...`);
+
+    for(let i = 0; i < lines.length; i += 20){
+      const batch = lines.slice(i, i+20);
+      await Promise.all(batch.map(async l => {
+        try {
+          const dr = await fetch(
+            `https://poe.ninja/poe1/api/economy/exchange/current/details?league=${encodeURIComponent(lg)}&type=Scarab&id=${encodeURIComponent(l.id)}`,
+            { headers: H2 }
+          );
+          if(!dr.ok) return;
+          const dd   = await dr.json();
+          const rate = (dd.pairs||[]).find(p => p.id==='chaos')?.rate;
+          if(rate == null) return;
+          const name    = dd.item?.name || slugToName2(l.id);
+          const icon    = dd.item?.image ? `https://web.poecdn.com${dd.item.image}` : null;
+          const key     = name.toLowerCase();
+          result[key]                        = { chaosValue: rate, icon, detailsId: l.id };
+          result[key.replace(/'/g,'')]       = result[key];
+          result[l.id.replace(/-/g,' ')]     = result[key];
+          result[slugToName2(l.id).toLowerCase()] = result[key];
+        } catch(e2){}
+      }));
+    }
+    console.log(`[scarab-prices] done ${Object.keys(result).length} entries`);
+  } catch(e) { console.error('[scarab-prices]', e.message); }
+
+  res.json(result);
+});
 
 // ── debug: ดู raw item data ────────────────────────────────────────────────
 // GET /api/debug-item?accountName=X&league=Y&tabIndex=Z&sessid=S&search=ultimatum
