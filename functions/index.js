@@ -549,6 +549,35 @@ app.get('/api/ninja-prices', async (req, res) => {
     'Map','Invitation','Vial','Incubator','Beast',
   ].map(fetchItemOnly));
 
+  // Hardcoded scarabs ที่ id ไม่ตรงกับ name → fetch details โดยตรง
+  const HARDCODED_SCARABS = [
+    { id: 'betrayal-scarab-of-unbreaking',       name: 'Betrayal Scarab of Unbreaking' },
+    { id: 'breach-scarab-of-the-hive',           name: 'Breach Scarab of the Hive' },
+    { id: 'expedition-scarab-of-infusion',       name: 'Expedition Scarab of Infusion' },
+    { id: 'legion-scarab-of-treasures',          name: 'Legion Scarab of Treasures' },
+    { id: 'breach-scarab-of-the-marshal',        name: 'Breach Scarab of the Marshal' },
+    { id: 'abyss-scarab-of-descending',          name: 'Abyss Scarab of Descending' },
+    { id: 'influencing-scarab-of-interference',  name: 'Influencing Scarab of Interference' },
+  ];
+  await Promise.all(HARDCODED_SCARABS.map(async ({ id, name }) => {
+    try {
+      const r = await fetch(
+        `${NINJA}/poe1/api/economy/exchange/current/details?league=${encodeURIComponent(lg)}&type=Scarab&id=${encodeURIComponent(id)}`,
+        { headers: H }
+      );
+      if (!r.ok) return;
+      const d    = await r.json();
+      const rate = (d.pairs||[]).find(p => p.id === 'chaos')?.rate;
+      if (!rate) return;
+      const icon  = d.item?.image ? `https://web.poecdn.com${d.item.image}` : null;
+      const key   = name.toLowerCase();
+      const entry = { chaosValue: rate, icon, source: 'ex-Scarab-hardcoded', detailsId: id };
+      priceMap[key]               = entry;
+      priceMap[key.replace(/'/g,'')] = entry;
+    } catch(e2) { console.warn('[scarab-hardcoded]', id, e2.message); }
+  }));
+  console.log('[scarab-hardcoded] done');
+
   const divinePrice = priceMap['divine orb']?.chaosValue || 1;
 
   // ดึงราคา Mirror of Kalandra เป็น divine จาก exchange details
