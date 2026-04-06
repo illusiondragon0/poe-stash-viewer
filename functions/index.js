@@ -558,6 +558,7 @@ app.get('/api/ninja-prices', async (req, res) => {
     { id: 'breach-scarab-of-the-marshal',        name: 'Breach Scarab of the Marshal' },
     { id: 'abyss-scarab-of-descending',          name: 'Abyss Scarab of Descending' },
     { id: 'influencing-scarab-of-interference',  name: 'Influencing Scarab of Interference' },
+	{ id: 'breach-scarab-of-instability',  name: 'Breach Scarab of Instability' },
   ];
   await Promise.all(HARDCODED_SCARABS.map(async ({ id, name }) => {
     try {
