@@ -30,7 +30,7 @@ app.get('/api/tabs', async (req, res) => {
   if (!accountName || !sessid) return res.status(400).json({ error: 'missing params' });
   const url = `https://www.pathofexile.com/character-window/get-stash-items`
     + `?accountName=${encodeURIComponent(accountName)}`
-    + `&league=${encodeURIComponent(league || 'Mirage')}&tabIndex=0&tabs=1`;
+    + `&league=${encodeURIComponent(league || 'Allflame')}&tabIndex=0&tabs=1`;
   try {
     const r = await fetch(url, { headers: POE_HEADERS(sessid) });
     const text = await r.text();
@@ -54,7 +54,7 @@ app.get('/api/stash', async (req, res) => {
 
   const base = `https://www.pathofexile.com/character-window/get-stash-items`
     + `?accountName=${encodeURIComponent(accountName)}`
-    + `&league=${encodeURIComponent(league || 'Mirage')}&tabs=0`;
+    + `&league=${encodeURIComponent(league || 'Allflame')}&tabs=0`;
 
   const typeParam = (tabType && TYPE_TABS.has(tabType)) ? `&type=${encodeURIComponent(tabType)}` : '';
 
@@ -104,7 +104,7 @@ app.get('/api/stash', async (req, res) => {
 
 // ── /api/ninja-prices ─────────────────────────────────────────────────────
 app.get('/api/ninja-prices', async (req, res) => {
-  const lg = req.query.league || 'Mirage';
+  const lg = req.query.league || 'Allflame';
 
   function nameToSlug(name) {
     return name.toLowerCase().replace(/'/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -558,7 +558,6 @@ app.get('/api/ninja-prices', async (req, res) => {
     { id: 'breach-scarab-of-the-marshal',        name: 'Breach Scarab of the Marshal' },
     { id: 'abyss-scarab-of-descending',          name: 'Abyss Scarab of Descending' },
     { id: 'influencing-scarab-of-interference',  name: 'Influencing Scarab of Interference' },
-	{ id: 'breach-scarab-of-instability',  name: 'Breach Scarab of Instability' },
   ];
   await Promise.all(HARDCODED_SCARABS.map(async ({ id, name }) => {
     try {
@@ -613,7 +612,7 @@ app.listen(PORT, () => console.log(`Ready on port ${PORT}`));
 // ── /api/scarab-prices ────────────────────────────────────────────────────
 // endpoint แยก เพื่อไม่บล็อก ninja-prices (Scarab มี 300+ ตัว ต้อง fetch details ทุกตัว)
 app.get('/api/scarab-prices', async (req, res) => {
-  const lg = req.query.league || 'Mirage';
+  const lg = req.query.league || 'Allflame';
   const H2 = { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' };
   const result = {};
 
@@ -669,7 +668,7 @@ app.get('/api/debug-item', async (req, res) => {
   if (!accountName || !sessid) return res.status(400).json({ error: 'missing params' });
   const url = `https://www.pathofexile.com/character-window/get-stash-items`
     + `?accountName=${encodeURIComponent(accountName)}`
-    + `&league=${encodeURIComponent(league || 'Mirage')}`
+    + `&league=${encodeURIComponent(league || 'Allflame')}`
     + `&tabIndex=${tabIndex || 0}&tabs=0`;
   try {
     const r    = await fetch(url, { headers: POE_HEADERS(sessid) });
