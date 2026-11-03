@@ -6,6 +6,7 @@ const app = express();
 
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Expose-Headers', 'Retry-After');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
@@ -34,7 +35,10 @@ app.get('/api/tabs', async (req, res) => {
   try {
     const r = await fetch(url, { headers: POE_HEADERS(sessid) });
     const text = await r.text();
-    if (!r.ok) return res.status(r.status).json({ error: `PoE API: ${r.status}`, body: text });
+    if (!r.ok) {
+      if (r.headers.get('retry-after')) res.setHeader('Retry-After', r.headers.get('retry-after'));
+      return res.status(r.status).json({ error: `PoE API: ${r.status}`, body: text });
+    }
     res.setHeader('Content-Type', 'application/json');
     res.send(text);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -70,7 +74,7 @@ app.get('/api/stash', async (req, res) => {
     urls.push(base + `&tabIndex=${tabIndex || 0}` + typeParam);
   }
 
-  let lastErr = '';
+  let lastErr = '', lastStatus = 404, retryAfter = null;
   for (const url of urls) {
     try {
       const r = await fetch(url, { headers: POE_HEADERS(sessid) });
@@ -95,11 +99,12 @@ app.get('/api/stash', async (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         return res.send(text);
       }
-      lastErr = text;
+      lastErr = text; lastStatus = r.status; retryAfter = r.headers.get('retry-after');
       if (r.status !== 404) break;
     } catch (e) { lastErr = e.message; break; }
   }
-  res.status(404).json({ error: 'PoE API: 404', body: lastErr });
+  if (retryAfter) res.setHeader('Retry-After', retryAfter);
+  res.status(lastStatus).json({ error: `PoE API: ${lastStatus}`, body: lastErr });
 });
 
 // ── /api/ninja-prices ─────────────────────────────────────────────────────

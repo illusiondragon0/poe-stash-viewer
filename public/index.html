@@ -312,7 +312,7 @@ async function init(){
   try{
     // Step 1: โหลด tabs (0→40%)
     setStatus('กำลังดึงข้อมูล Tabs…','');
-    const tabsRes = await fetch(`${API_BASE}/api/tabs?accountName=${enc(account)}&league=${enc(league)}&sessid=${enc(sessid)}`);
+    const tabsRes = await fetchGGG(`${API_BASE}/api/tabs?accountName=${enc(account)}&league=${enc(league)}&sessid=${enc(sessid)}`);
     let data; try{data=await tabsRes.json();}catch{throw new Error('ไม่สามารถเชื่อมต่อ server');}
     if(!tabsRes.ok) throw new Error(data.error||`HTTP ${tabsRes.status}`);
     if(!data.tabs?.length) throw new Error('ไม่พบ Stash Tab');
@@ -421,7 +421,7 @@ async function loadSelected(){
     setStatus(`โหลด: ${tab.n} (${i+1}/${selected.length})…`,'');
     setProgress((i/selected.length)*100);
     try{
-      const res=await fetch(`${API_BASE}/api/stash?accountName=${enc(account)}&league=${enc(league)}&tabIndex=${idx}&tabType=${enc(tab.type||'')}&tabId=${enc(tab.id||'')}&sessid=${enc(sessid)}`);
+      const res=await fetchGGG(`${API_BASE}/api/stash?accountName=${enc(account)}&league=${enc(league)}&tabIndex=${idx}&tabType=${enc(tab.type||'')}&tabId=${enc(tab.id||'')}&sessid=${enc(sessid)}`);
       let data; try{data=await res.json();}catch{throw new Error('ไม่สามารถเชื่อมต่อ server');}
       if(!res.ok) throw new Error(data.error||`HTTP ${res.status}`);
       if(data.items) data.items.forEach(it=>{it._tabName=tab.n;it._tabType=tab.type;});
@@ -431,7 +431,7 @@ async function loadSelected(){
       btn.disabled=false; setProgress(0);
       document.getElementById('progressWrap').style.display='none'; return;
     }
-    if(i<selected.length-1) await sleep(300);
+    if(i<selected.length-1) await sleep(1000);
   }
   setProgress(100);
   setTimeout(()=>{document.getElementById('progressWrap').style.display='none';setProgress(0);},500);
@@ -1263,6 +1263,15 @@ function v(id){return document.getElementById(id).value.trim();}
 function enc(s){return encodeURIComponent(s);}
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+// GGG rate limit (429): รอตาม Retry-After แล้วลองใหม่ สูงสุด 3 ครั้ง
+async function fetchGGG(url){
+  for(let i=0;;i++){
+    const res=await fetch(url);
+    if(res.status!==429||i>=3) return res;
+    const wait=Math.min(Math.max(parseInt(res.headers.get('Retry-After'))||15,5),60);
+    for(let s=wait;s>0;s--){setStatus(`โดนจำกัดความเร็วจาก PoE (429) — รอ ${s} วินาที…`,'');await sleep(1000);}
+  }
+}
 function setProgress(p){document.getElementById('progressFill').style.width=p+'%';}
 function setStatus(msg,type){
   const el=document.getElementById('statusText');
