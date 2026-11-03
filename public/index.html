@@ -1060,7 +1060,11 @@ function updateWealth(){
   document.getElementById('wealthVal').innerHTML = `${Math.round(total).toLocaleString()}<span class="unit">c</span>`;
   document.getElementById('wealthDiv').textContent = div ? `≈ ${div}d` : '';
 
-  const sorted=[...allItems].filter(it=>it.totalChaos>0).sort((a,b)=>b.totalChaos-a.totalChaos).slice(0,8);
+  // แสดงเฉพาะ Divine Orb กับ Chaos Orb (รวมทุก tab)
+  const sorted=['Divine Orb','Chaos Orb'].map(n=>{
+    const rows=allItems.filter(it=>it.name===n&&it.totalChaos>0);
+    return rows.length?{name:n,icon:rows[0].icon,totalChaos:rows.reduce((s,it)=>s+it.totalChaos,0)}:null;
+  }).filter(Boolean);
   document.getElementById('breakdownList').innerHTML = sorted.map(it=>`
     <div class="breakdown-item">
       ${it.icon?`<img src="${escHtml(it.icon)}" alt=""/>`:''}
