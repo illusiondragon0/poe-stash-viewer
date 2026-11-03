@@ -173,10 +173,10 @@ app.get('/api/ninja-prices', async (req, res) => {
     } catch (e) { console.warn('[currency]', type, e.message); }
   }
 
-  // ── STEP 3: Item-only (no exchange) ──────────────────────────────────────
+  // ── STEP 3: ชื่อไม่ซ้ำ ไม่มีใน exchange (Vial, Beast, Corpse ...) — ใช้ stash overview ──────────────────────────────────────
   async function fetchItemOnly(type) {
     try {
-      const r = await fetch(`${NINJA}/api/data/itemoverview?league=${encodeURIComponent(lg)}&type=${encodeURIComponent(type)}`, { headers: H });
+      const r = await fetch(`${NINJA}/poe1/api/economy/stash/current/item/overview?league=${encodeURIComponent(lg)}&type=${encodeURIComponent(type)}`, { headers: H });
       if (!r.ok) return;
       const data = await r.json();
       (data.lines || []).forEach(line => {
@@ -255,7 +255,7 @@ app.get('/api/ninja-prices', async (req, res) => {
   await Promise.all([
     'Currency','Fragment','Oil','Essence','DeliriumOrb','DivinationCard',
     'Artifact','Fossil','Resonator','Omen','AllflameEmber','Runegraft','DjinnCoin',
-    'Tattoo','Astrolabe',
+    'Tattoo','Astrolabe','Ducat','EnshroudingCrystal',
   ].map(fetchCurrencyType));
 
   await Promise.all([
@@ -278,7 +278,7 @@ app.get('/api/ninja-prices', async (req, res) => {
   ]);
 
   await Promise.all([
-    'Map','Invitation','Vial','Incubator','Beast',
+    'Invitation','Vial','Beast','Wombgift','Corpse','ScryingOrb',
   ].map(fetchItemOnly));
 
   // Hardcoded scarabs ที่ id ไม่ตรงกับ name → fetch details โดยตรง
