@@ -105,7 +105,7 @@ td.name-cell{max-width:260px}
 td.qty-cell{color:var(--text);font-weight:600;font-size:13px}
 td.price-cell{color:#e8d890}
 td.total-cell{color:var(--gold2);font-weight:700}
-td.no-price{color:var(--text3);font-size:12px}
+td.no-price{color:var(--text3);font-size:12px;white-space:nowrap}
 tbody tr:nth-child(even){background:rgba(255,255,255,0.03)}
 tbody tr:hover{background:rgba(255,255,255,0.07)!important}
 td.real-price-cell{padding:4px 8px}
@@ -1119,7 +1119,7 @@ function renderTable(){
       </td>
       <td class="tab-cell">${escHtml(it.tab)}</td>
       <td class="num qty-cell">${it.qty.toLocaleString()}</td>
-      <td class="num ${it.chaosEach!==null?'price-cell':'no-price'}">${it.chaosEach!==null?formatChaosSmall(it.chaosEach)+'c':'—'}</td>
+      <td class="num ${it.chaosEach!==null?'price-cell':'no-price'}">${it.chaosEach!==null?formatChaosSmall(it.chaosEach)+'c':'ไม่มีราคาใน poe ninja'}</td>
       <td class="num ${it.totalChaos!==null?'total-cell':'no-price'}">${it.totalChaos!==null?(formatChaos(it.totalChaos)+(divinePrice>1?' <span style="color:var(--text2);font-size:11px">('+( it.totalChaos/divinePrice).toFixed(1)+'d)</span>':'')):'—'}</td>
       <td class="real-price-cell"><input type="text" placeholder="ราคาจริง" data-key="${escAttr(rowKey(it))}" value="${escHtml(realPrices[rowKey(it)]||'')}" oninput="onRealPriceInput(this)" onclick="this.select()"/></td>
       <td class="calc-cell" onclick="copyCell(this)" title="คลิกเพื่อ copy">${(()=>{const rp=realPrices[rowKey(it)];if(!rp)return '';const r=computeRealPrice(it.qty,rp);return r.error?'—':(r.price?String(r.price):'—');})()}</td>
