@@ -143,197 +143,34 @@ app.get('/api/ninja-prices', async (req, res) => {
   const stashNameMap = {};
   const clusterMap   = {};
 
-  // ── STEP 1: Currency & Fragment ──────────────────────────────────────────
-  // Strategy: overview ให้รายชื่อ + detailsId
-  //           exchange overview ให้ primaryValue (แต่ id อาจไม่ตรง)
-  //           exchange details ให้ rate ตรงๆ ถ้า match id ได้
+  // ── STEP 1: Exchange types (Currency, Fragment, Oil, Tattoo ...) ──────────────────────────────────────────
+  // exchange overview: lines[] = ราคา (id, primaryValue), items[] = ชื่อ/รูป (id, name, image)
   async function fetchCurrencyType(type) {
     try {
-      const [exRes, ovRes] = await Promise.all([
-        fetch(`${NINJA}/poe1/api/economy/exchange/current/overview?league=${encodeURIComponent(lg)}&type=${encodeURIComponent(type)}`, { headers: H }),
-        fetch(`${NINJA}/api/data/currencyoverview?league=${encodeURIComponent(lg)}&type=${encodeURIComponent(type)}`, { headers: H }),
-      ]);
-      const exData = exRes.ok ? await exRes.json() : { lines: [] };
-      const ovData = ovRes.ok ? await ovRes.json() : { lines: [], currencyDetails: [] };
-
-      // exchange overview: id → primaryValue
-      const exById = {};
-      (exData.lines || []).forEach(l => { if (l.id) exById[l.id] = l.primaryValue; });
-
-      // icon map
-      const iconByName = {};
-      (ovData.currencyDetails || []).forEach(d => {
-        if (d.name) iconByName[d.name.toLowerCase()] = d.icon;
-        if (d.detailsId) iconByName[d.detailsId] = d.icon;
-      });
-
-      // items ที่ไม่มีราคาใน exchange overview → เก็บ detailsId ไว้ fetch details ทีหลัง
-      const needDetails = [];
-
-      (ovData.lines || []).forEach(line => {
-        const name = line.currencyTypeName;
-        if (!name) return;
-        const key        = name.toLowerCase();
-        const detailsId  = line.detailsId || '';
-        const slug       = nameToSlug(name);
-
-        // Exchange-first: ลอง match id หลายรูปแบบ
-        const candidates = [
-          detailsId, slug,
-          detailsId.replace(/-orb$/, ''),
-          detailsId.replace(/-scroll$/, ''),
-          detailsId.split('-').filter(w => !['of','the','and','scroll'].includes(w)).join('-'),
-        ].filter(Boolean);
-
-        let exPrice = null;
-        for (const c of candidates) {
-          if (exById[c] != null) { exPrice = exById[c]; break; }
-        }
-
-        if (exPrice != null) {
-          // มีราคาจาก exchange overview → ใช้เลย
-          const entryEx = {
-            chaosValue: exPrice,
-            icon: iconByName[key] || iconByName[detailsId] || null,
-            source: `ex-${type}`,
-            detailsId,
-          };
-          priceMap[key] = entryEx;
-          priceMap[key.replace(/'/g, '')] = entryEx; // key ไม่มี apostrophe
-        } else if (line.chaosEquivalent && line.chaosEquivalent > 0) {
-          // fallback chaosEquivalent แต่ mark ว่าอาจไม่แม่น
-          const entryOv = {
-            chaosValue: line.chaosEquivalent,
-            icon: iconByName[key] || iconByName[detailsId] || null,
-            source: `ov-${type}`,
-            detailsId,
-          };
-          priceMap[key] = entryOv;
-          priceMap[key.replace(/'/g, '')] = entryOv;
-          // ลองดึง details เพื่อ override ด้วยราคาที่แม่นกว่า
-          if (detailsId) needDetails.push({ key, detailsId, type, iconFallback: iconByName[key] || iconByName[detailsId] || null });
-        } else {
-          // ไม่มีเลย → ลอง details
-          if (detailsId) needDetails.push({ key, detailsId, type, iconFallback: iconByName[key] || iconByName[detailsId] || null });
-        }
-      });
-
-      // เพิ่ม exchange items ที่ไม่มีใน overview (slugToName + fetch details เพื่อได้ชื่อจริง)
-      const mappedSlugs = new Set();
-      (ovData.lines || []).forEach(l => {
-        mappedSlugs.add(l.detailsId || '');
-        mappedSlugs.add(nameToSlug(l.currencyTypeName || ''));
-      });
-      const extraItems = [];
-      (exData.lines || []).forEach(l => {
-        if (!l.id || l.primaryValue == null || mappedSlugs.has(l.id)) return;
-        extraItems.push(l);
-      });
-      // fetch details เพื่อได้ชื่อจริงพร้อม apostrophe
-      for (let i = 0; i < extraItems.length; i += 5) {
-        const batch = extraItems.slice(i, i + 5);
-        await Promise.all(batch.map(async (l) => {
-          const d = await fetchExDetails(type, l.id);
-          const realName = d?.name || slugToName(l.id);
-          const key = realName.toLowerCase();
-          // เก็บทั้ง key จริงและ key ไม่มี apostrophe
-          const keyNoApos = key.replace(/'/g, '');
-          const entry = {
-            chaosValue: d?.chaosValue || l.primaryValue,
-            icon: d?.icon || iconByName[l.id] || null,
-            source: d ? `details-extra-${type}` : `ex-extra-${type}`,
-            detailsId: l.id,
-          };
-          if (!priceMap[key]) priceMap[key] = entry;
-          if (!priceMap[keyNoApos]) priceMap[keyNoApos] = entry;
-        }));
-      }
-
-      // Chaos Orb hardcode
-      if (!priceMap['chaos orb']) {
-        priceMap['chaos orb'] = { chaosValue: 1, icon: iconByName['chaos orb'] || null, source: 'hardcoded', detailsId: 'chaos-orb' };
-      }
-
-      // Fetch details สำหรับ items ที่ miss หรือใช้ chaosEquivalent
-      // Rate limit: ไม่เกิน 5 parallel
-      for (let i = 0; i < needDetails.length; i += 5) {
-        const batch = needDetails.slice(i, i + 5);
-        await Promise.all(batch.map(async ({ key, detailsId, type, iconFallback }) => {
-          const d = await fetchExDetails(type, detailsId);
-          if (d && d.chaosValue > 0) {
-            priceMap[key] = {
-              chaosValue: d.chaosValue,
-              icon: d.icon || iconFallback,
-              source: `details-${type}`,
-              detailsId,
-            };
-          }
-        }));
-      }
-
-      console.log(`[${type}] ex=${Object.keys(exById).length} ov=${(ovData.lines||[]).length} details=${needDetails.length}`);
-    } catch (e) { console.warn('[currency]', type, e.message); }
-  }
-
-  // ── STEP 2: Item types (Scarab, Oil etc.) ─────────────────────────────────
-  async function fetchItemType(type) {
-    try {
-      const [exRes, itemRes] = await Promise.all([
-        fetch(`${NINJA}/poe1/api/economy/exchange/current/overview?league=${encodeURIComponent(lg)}&type=${encodeURIComponent(type)}`, { headers: H }),
-        fetch(`${NINJA}/api/data/itemoverview?league=${encodeURIComponent(lg)}&type=${encodeURIComponent(type)}`, { headers: H }),
-      ]);
-      const exData   = exRes.ok   ? await exRes.json()   : { lines: [] };
-      const itemData = itemRes.ok ? await itemRes.json() : { lines: [] };
-
-      const exById = {};
-      (exData.lines || []).forEach(l => { if (l.id) exById[l.id] = l.primaryValue; });
-
-      const byDetailsId = {};
-      const bySlug      = {};
-      (itemData.lines || []).forEach(line => {
-        if (line.detailsId) byDetailsId[line.detailsId] = line;
-        if (line.name) bySlug[nameToSlug(line.name)] = line;
-      });
-
-      // Exchange-first: match หลายวิธี
-      (exData.lines || []).forEach(line => {
-        if (!line.id || line.primaryValue == null) return;
-        const item = byDetailsId[line.id]
-          || bySlug[line.id]
-          || bySlug[nameToSlug(slugToName(line.id))]
-          // Scarab: exchange id = "abyss-scarab-of-emptiness"
-          // itemoverview name = "Abyss Scarab of Emptiness" → slug matches
-          || bySlug[line.id.replace(/-scarab-/g,'-scarab-of-').replace(/^scarab-/,'')]
-          || null;
-        if (!item) return;
-        const key = item.name.toLowerCase();
-        priceMap[key] = {
-          chaosValue: line.primaryValue,
-          icon: item.icon || null,
+      const r = await fetch(`${NINJA}/poe1/api/economy/exchange/current/overview?league=${encodeURIComponent(lg)}&type=${encodeURIComponent(type)}`, { headers: H });
+      if (!r.ok) { console.warn('[currency]', type, r.status); return; }
+      const data = await r.json();
+      const byId = {};
+      (data.items || []).forEach(i => { byId[i.id] = i; });
+      (data.lines || []).forEach(l => {
+        const it = byId[l.id];
+        if (!it || !it.name || l.primaryValue == null) return;
+        const entry = {
+          chaosValue: l.primaryValue,
+          icon: it.image ? `https://web.poecdn.com${it.image}` : null,
           source: `ex-${type}`,
-          detailsId: line.id,
+          detailsId: it.detailsId || l.id,
         };
-        // เก็บ slug key ด้วยเผื่อ match ด้วย typeLine
-        priceMap[line.id.replace(/-/g,' ')] = priceMap[key];
+        const key = it.name.toLowerCase();
+        priceMap[key] = entry;
+        priceMap[key.replace(/'/g, '')] = entry;
+        priceMap[l.id.replace(/-/g, ' ')] = entry;
       });
-
-      // Fallback: overview items ที่ไม่มีใน exchange
-      (itemData.lines || []).forEach(line => {
-        if (!line.name || !line.chaosValue) return;
-        const key = line.name.toLowerCase();
-        if (!priceMap[key]) priceMap[key] = { chaosValue: line.chaosValue, icon: line.icon || null, source: `ov-${type}` };
-      });
-
-      // Exchange items ที่ map ไม่ได้ → slugToName
-      (exData.lines || []).forEach(l => {
-        if (!l.id || l.primaryValue == null) return;
-        if (byDetailsId[l.id] || bySlug[l.id]) return;
-        const key = slugToName(l.id).toLowerCase();
-        if (!priceMap[key]) priceMap[key] = { chaosValue: l.primaryValue, icon: null, source: `ex-slug-${type}` };
-      });
-
-      console.log(`[${type}] ex=${Object.keys(exById).length} items=${(itemData.lines||[]).length}`);
-    } catch (e) { console.warn('[item]', type, e.message); }
+      if (!priceMap['chaos orb']) {
+        priceMap['chaos orb'] = { chaosValue: 1, icon: null, source: 'hardcoded', detailsId: 'chaos-orb' };
+      }
+      console.log(`[${type}] lines=${(data.lines || []).length}`);
+    } catch (e) { console.warn('[currency]', type, e.message); }
   }
 
   // ── STEP 3: Item-only (no exchange) ──────────────────────────────────────
@@ -414,117 +251,12 @@ app.get('/api/ninja-prices', async (req, res) => {
   // ── RUN ───────────────────────────────────────────────────────────────────
   console.log(`\n[prices] loading: ${lg}`);
 
+  // ทุกประเภทที่มีใน exchange overview ใช้ฟังก์ชันเดียวกัน
   await Promise.all([
-    fetchCurrencyType('Currency'),
-    fetchCurrencyType('Fragment'),
-  ]);
-
-  await Promise.all([
-    'Oil','Essence','DeliriumOrb','DivinationCard',
-    'Artifact','Fossil','Resonator','Omen',
-    'AllflameEmber','Runegraft','DjinnCoin',
-  ].map(fetchItemType));
-
-  // Tattoo + Astrolabe: ใช้ exchange overview โดยตรง (id = slug, primaryValue = chaos) (id = slug, primaryValue = chaos rate)
-  await (async () => {
-    try {
-      const [exRes, itemRes] = await Promise.all([
-        fetch(`${NINJA}/poe1/api/economy/exchange/current/overview?league=${encodeURIComponent(lg)}&type=Tattoo`, { headers: H }),
-        fetch(`${NINJA}/api/data/itemoverview?league=${encodeURIComponent(lg)}&type=Tattoo`, { headers: H }),
-      ]);
-      const exData   = exRes.ok   ? await exRes.json()   : { lines: [] };
-      const itemData = itemRes.ok ? await itemRes.json() : { lines: [] };
-
-      // build icon map from itemoverview
-      const iconBySlug = {};
-      const iconByName = {};
-      (itemData.lines || []).forEach(line => {
-        if (line.name) {
-          iconByName[line.name.toLowerCase()] = line.icon;
-          iconBySlug[nameToSlug(line.name)]   = line.icon;
-          // เก็บราคา fallback จาก itemoverview ด้วย
-          if (!priceMap[line.name.toLowerCase()] && line.chaosValue) {
-            priceMap[line.name.toLowerCase()] = { chaosValue: line.chaosValue, icon: line.icon||null, source: 'ov-Tattoo' };
-          }
-        }
-      });
-
-      // exchange-first: id → primaryValue, convert slug → real name
-      (exData.lines || []).forEach(l => {
-        if (!l.id || l.primaryValue == null) return;
-        const realName = slugToName(l.id);
-        const key      = realName.toLowerCase();
-        const icon     = iconBySlug[l.id] || iconByName[key] || null;
-        // override ด้วย exchange price
-        priceMap[key]             = { chaosValue: l.primaryValue, icon, source: 'ex-Tattoo', detailsId: l.id };
-        priceMap[l.id.replace(/-/g,' ')] = priceMap[key];
-      });
-
-      // fetch details สำหรับ Tattoo ที่ไม่มี icon (batch 5)
-      const tattooNoIcon = (exData.lines||[]).filter(l => {
-        const k = slugToName(l.id||'').toLowerCase();
-        return l.id && l.primaryValue != null && !priceMap[k]?.icon;
-      });
-      for(let i = 0; i < tattooNoIcon.length; i += 5){
-        const batch = tattooNoIcon.slice(i, i+5);
-        await Promise.all(batch.map(async l => {
-          try {
-            const dr = await fetch(
-              `${NINJA}/poe1/api/economy/exchange/current/details?league=${encodeURIComponent(lg)}&type=Tattoo&id=${encodeURIComponent(l.id)}`,
-              { headers: H }
-            );
-            if(dr.ok){
-              const dd = await dr.json();
-              if(dd.item?.image){
-                const k = slugToName(l.id).toLowerCase();
-                const iconUrl = `https://web.poecdn.com${dd.item.image}`;
-                if(priceMap[k]) priceMap[k].icon = iconUrl;
-              }
-            }
-          } catch(e2){}
-        }));
-      }
-      console.log(`[Tattoo] ex=${(exData.lines||[]).length} items=${(itemData.lines||[]).length}`);
-    } catch(e) { console.warn('[Tattoo]', e.message); }
-  })();
-
-  // Astrolabe: exchange overview + details สำหรับ icon
-  await (async () => {
-    try {
-      const exRes = await fetch(
-        `${NINJA}/poe1/api/economy/exchange/current/overview?league=${encodeURIComponent(lg)}&type=Astrolabe`,
-        { headers: H }
-      );
-      const exData = exRes.ok ? await exRes.json() : { lines: [] };
-      const lines  = exData.lines || [];
-
-      // fetch details batch เพื่อเอา item.image (5 parallel)
-      for(let i = 0; i < lines.length; i += 5){
-        const batch = lines.slice(i, i + 5);
-        await Promise.all(batch.map(async l => {
-          if(!l.id || l.primaryValue == null) return;
-          const realName = slugToName(l.id);
-          const key      = realName.toLowerCase();
-          // ลอง fetch details เพื่อเอา icon
-          let icon = null;
-          try {
-            const dr = await fetch(
-              `${NINJA}/poe1/api/economy/exchange/current/details?league=${encodeURIComponent(lg)}&type=Astrolabe&id=${encodeURIComponent(l.id)}`,
-              { headers: H }
-            );
-            if(dr.ok){
-              const dd = await dr.json();
-              if(dd.item?.image) icon = `https://web.poecdn.com${dd.item.image}`;
-            }
-          } catch(e2) {}
-          const entry = { chaosValue: l.primaryValue, icon, source: 'ex-Astrolabe', detailsId: l.id };
-          priceMap[key]                    = entry;
-          priceMap[l.id.replace(/-/g,' ')] = entry;
-        }));
-      }
-      console.log(`[Astrolabe] ${lines.length} items`);
-    } catch(e) { console.warn('[Astrolabe]', e.message); }
-  })();
+    'Currency','Fragment','Oil','Essence','DeliriumOrb','DivinationCard',
+    'Artifact','Fossil','Resonator','Omen','AllflameEmber','Runegraft','DjinnCoin',
+    'Tattoo','Astrolabe',
+  ].map(fetchCurrencyType));
 
   await Promise.all([
     fetchStashItemType('UniqueWeapon'),
