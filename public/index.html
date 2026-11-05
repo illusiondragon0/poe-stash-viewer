@@ -4,174 +4,192 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>PoE Stash Viewer</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#1a1a1a;--bg2:#242424;--bg3:#2d2d2d;--bg4:#353535;
-  --border:#3a3a3a;--text:#c8c8c8;--text2:#999;--text3:#666;
-  --gold:#c8aa6e;--gold2:#f0d080;
-  --green:#4caf50;--green2:#81c784;
-  --blue:#5c9bdb;--red:#e57373;
-  --unique:#af6025;--rare:#c8b400;--magic:#8888ff;--normal:#aaa;--gem:#1ba29b;--currency:#c8a040;
-  --accent:#4a90d9;
+  /* surfaces: graphite ramp */
+  --bg-deep:#0f0f10;--bg:#141415;--card:#19191b;--raised:#232325;
+  --line:rgba(237,237,237,.08);--line-strong:rgba(237,237,237,.16);
+  --text:#ededed;--text2:#a1a1a6;--text3:#85858b;
+  --accent:#d1ae6b;--on-accent:#141415;
+  --pos:#4cc38a;--neg:#e5484d;
+  /* item rarity colours carry meaning, kept as in-game */
+  --unique:#d98a45;--rare:#e0cf5c;--magic:#8aa0f5;--normal:#b4b4b8;--gem:#34b8ad;--currency:#d1ae6b;--div:#d49a9a;
+  --ease:cubic-bezier(0.22,1,0.36,1);
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  /* aliases used by inline styles in the script */
+  --bg2:var(--card);--bg3:var(--raised);--bg4:#2c2c2f;--border:var(--line);
+  --gold:var(--accent);--gold2:var(--accent);--green2:var(--pos);--red:var(--neg);
 }
-body{font-family:'Noto Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+body{font-family:'IBM Plex Sans Thai','IBM Plex Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:20px;-webkit-font-smoothing:antialiased}
+svg.i{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 
 /* ── TOP BAR ── */
-.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16px;height:48px;display:flex;align-items:center;gap:12px}
-.topbar-logo{font-weight:700;font-size:16px;color:var(--gold);letter-spacing:.05em;margin-right:8px}
-.topbar input,.topbar select{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:4px;font-size:13px;outline:none}
-.topbar input:focus,.topbar select:focus{border-color:var(--accent)}
-.topbar input{width:180px}
-.topbar input[type=password]{width:200px;letter-spacing:.1em}
-.topbar label-sm{font-size:11px;color:var(--text2);white-space:nowrap}
-.topbar-group{display:flex;flex-direction:column;gap:2px}
-.btn{padding:6px 14px;border-radius:4px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s}
-.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#3a7fc8}
+.topbar{background:var(--bg-deep);border-bottom:1px solid var(--line);padding:8px 24px;min-height:64px;display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:8px;align-self:center;margin-right:8px}
+.topbar-logo{font-weight:600;font-size:18px;line-height:24px;color:var(--text)}
+.brand .sync-info{font-family:var(--mono)}
+.topbar input,.topbar select{height:36px;background:var(--card);border:1px solid var(--line-strong);color:var(--text);padding:0 12px;border-radius:8px;font:inherit;font-size:14px;outline:none;transition:border-color 160ms var(--ease)}
+.topbar input:focus-visible,.topbar select:focus-visible,.filter-select:focus-visible,.search-wrap input:focus-visible,td.real-price-cell input:focus-visible{border-color:var(--accent);box-shadow:0 0 0 3px rgba(209,174,107,.18)}
+.topbar input{width:192px}
+.topbar input[type=password]{width:208px}
+.topbar-group{display:flex;flex-direction:column;gap:4px}
+.field-label{font-size:12px;line-height:16px;color:var(--text3)}
+.btn{height:36px;padding:0 16px;border-radius:8px;border:1px solid transparent;cursor:pointer;font:inherit;font-size:14px;font-weight:500;display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;transition:background-color 140ms var(--ease),border-color 140ms var(--ease),color 140ms var(--ease),transform 140ms var(--ease)}
+.btn:active:not(:disabled){transform:scale(.98)}
+.btn:focus-visible,.btn-load:focus-visible,.tab-item:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn-primary{background:var(--text);color:var(--bg)}.btn-primary:hover{background:#fff}
 .btn-primary:disabled{opacity:.4;cursor:not-allowed}
-.btn-ghost{background:var(--bg3);color:var(--text);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--text3);background:var(--bg4)}
-.ninja-status{font-size:11px;padding:3px 8px;border-radius:3px;background:rgba(76,175,80,.12);color:#81c784;border:1px solid rgba(76,175,80,.25);white-space:nowrap}
-.ninja-status.loading{background:rgba(100,100,100,.12);color:var(--text2);border-color:var(--border)}
-.ninja-status.error{background:rgba(229,115,115,.1);color:#e57373;border-color:rgba(229,115,115,.25)}
+.btn-ghost{background:var(--raised);color:var(--text);border-color:var(--line-strong);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}.btn-ghost:hover{background:#2c2c2f}
+.ninja-status{align-self:center;display:inline-flex;align-items:center;gap:8px;height:28px;font-size:12px;padding:0 12px;border-radius:8px;border:1px solid var(--line);color:var(--text2);white-space:nowrap;font-family:var(--mono)}
+.ninja-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--pos)}
+.ninja-status.loading::before{background:var(--text3)}
+.ninja-status.error{color:var(--neg)}
+.ninja-status.error::before{background:var(--neg)}
 
 /* ── LAYOUT ── */
-.layout{display:flex;height:calc(100vh - 48px)}
+.layout{display:flex;height:calc(100vh - 64px)}
 
 /* ── SIDEBAR ── */
-.sidebar{width:180px;min-width:180px;background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:8px 0}
-.sidebar-title{font-size:11px;color:var(--text3);letter-spacing:.1em;padding:8px 14px 4px;text-transform:uppercase}
-.tab-item{display:flex;align-items:center;gap:8px;padding:6px 14px;cursor:pointer;border-radius:0;transition:background .1s;user-select:none}
-.tab-item:hover{background:var(--bg3)}
-.tab-item.checked{color:var(--gold)}
-.tab-item .tab-icon{font-size:16px;width:22px;text-align:center;flex-shrink:0}
-.tab-item .tab-img{width:22px;height:22px;object-fit:contain;flex-shrink:0;image-rendering:pixelated}
-.tab-item .tab-name{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tab-item .cb{width:16px;height:16px;border:2px solid var(--border);border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--bg3);transition:all .1s}
+.sidebar{width:240px;min-width:240px;background:var(--bg-deep);border-right:1px solid var(--line);overflow-y:auto;padding:16px 12px}
+.sidebar-title{font-size:12px;line-height:16px;color:var(--text3);padding:0 8px 8px}
+.tab-item{display:flex;align-items:center;gap:8px;height:36px;padding:0 8px;margin-bottom:2px;cursor:pointer;border-radius:8px;border:1px solid transparent;color:var(--text2);transition:background-color 120ms var(--ease),color 120ms var(--ease);user-select:none}
+.tab-item:hover{background:var(--card);color:var(--text)}
+.tab-item.checked{background:var(--raised);border-color:var(--line);color:var(--text);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+.tab-item .tab-icon{width:24px;display:flex;justify-content:center;color:var(--text3);flex-shrink:0}
+.tab-item .tab-img{width:24px;height:24px;object-fit:contain;flex-shrink:0;image-rendering:pixelated}
+.tab-item .tab-name{flex:1;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tab-item .cb{width:16px;height:16px;border:1px solid var(--line-strong);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:transparent;transition:background-color 120ms var(--ease),border-color 120ms var(--ease)}
 .tab-item.checked .cb{background:var(--accent);border-color:var(--accent)}
 .tab-item .cb svg{display:none}
 .tab-item.checked .cb svg{display:block}
-.sidebar-actions{padding:8px 14px;display:flex;gap:6px}
-.sidebar-actions .btn{flex:1;padding:4px 6px;font-size:11px}
+.tab-item .cb svg path{stroke:var(--on-accent)}
+.sidebar-actions{padding:16px 0 0;display:flex;gap:8px}
+.sidebar-actions .btn{flex:1;height:32px;font-size:13px;padding:0 8px}
 
 /* ── MAIN ── */
-.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 
 /* ── WEALTH HEADER ── */
-.wealth-header{background:var(--bg2);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
-.wealth-title{font-size:18px;font-weight:700;color:var(--text)}
-.wealth-value{font-size:28px;font-weight:700;color:var(--gold2)}
-.wealth-value .unit{font-size:16px;color:var(--gold);margin-left:4px}
-.wealth-change{font-size:13px;padding:2px 8px;border-radius:3px;background:rgba(76,175,80,.12);color:var(--green2);border:1px solid rgba(76,175,80,.2)}
+.wealth-header{border-bottom:1px solid var(--line);padding:20px 24px;display:flex;align-items:center;gap:24px;flex-wrap:wrap}
+.wealth-label{font-size:12px;line-height:16px;color:var(--text3);margin-bottom:4px}
+.wealth-row{display:flex;align-items:baseline;gap:12px}
+.wealth-value{font-family:var(--mono);font-size:32px;line-height:40px;font-weight:500;color:var(--accent);font-variant-numeric:tabular-nums}
+.wealth-value .unit{font-size:16px;color:var(--text3);margin-left:4px}
+.wealth-div{font-family:var(--mono);color:var(--text2);font-size:14px;font-variant-numeric:tabular-nums}
 .wealth-breakdown{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
-.breakdown-item{display:flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px}
-.breakdown-item img{width:20px;height:20px;object-fit:contain}
-.breakdown-val{color:var(--gold);font-weight:600}
+.breakdown-item{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px 8px 8px;font-size:13px}
+.breakdown-item img{width:24px;height:24px;object-fit:contain}
+.breakdown-item span:not(.breakdown-val){font-size:13px!important;color:var(--text2)!important;max-width:none!important}
+.breakdown-val{font-family:var(--mono);color:var(--text);font-weight:500;font-variant-numeric:tabular-nums}
 
 /* ── TOOLBAR ── */
-.toolbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.search-wrap{position:relative;flex:1;min-width:160px;max-width:280px}
-.search-wrap input{width:100%;padding:6px 10px 6px 30px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;outline:none}
-.search-wrap input:focus{border-color:var(--accent)}
-.search-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px}
-.filter-select{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:4px;font-size:13px;outline:none}
-.total-badge{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:5px 12px;font-size:13px;color:var(--text2);white-space:nowrap}
-.total-badge span{color:var(--gold2);font-weight:700}
-.toolbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
-.sync-info{font-size:11px;color:var(--text3)}
-.btn-load{background:var(--accent);color:#fff;border:none;padding:6px 16px;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer}
-.btn-load:hover{background:#3a7fc8}
+.toolbar{border-bottom:1px solid var(--line);padding:12px 24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.search-wrap{position:relative;flex:1;min-width:160px;max-width:320px}
+.search-wrap input{width:100%;height:36px;padding:0 12px 0 36px;background:var(--card);border:1px solid var(--line-strong);border-radius:8px;color:var(--text);font:inherit;font-size:14px;outline:none;transition:border-color 160ms var(--ease)}
+.search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3);display:flex}
+.filter-select{height:36px;background:var(--card);border:1px solid var(--line-strong);color:var(--text);padding:0 12px;border-radius:8px;font:inherit;font-size:14px;outline:none}
+.total-badge{font-size:13px;color:var(--text2);white-space:nowrap}
+.total-badge span{font-family:var(--mono);color:var(--text);font-weight:500;font-variant-numeric:tabular-nums}
+.toolbar-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.sync-info{font-size:12px;color:var(--text3)}
+.btn-load{display:inline-flex;align-items:center;justify-content:center;height:36px;background:var(--text);color:var(--bg);border:none;padding:0 16px;border-radius:8px;font:inherit;font-size:14px;font-weight:500;cursor:pointer;transition:background-color 140ms var(--ease),transform 140ms var(--ease)}
+.btn-load:hover:not(:disabled){background:#fff}
+.btn-load:active:not(:disabled){transform:scale(.98)}
 .btn-load:disabled{opacity:.4;cursor:not-allowed}
 
 /* ── TABLE ── */
 .table-container{flex:1;overflow:auto}
 table{width:100%;border-collapse:collapse}
 thead{position:sticky;top:0;z-index:10}
-thead tr{background:var(--bg2);border-bottom:2px solid var(--border)}
-th{padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text2);letter-spacing:.05em;white-space:nowrap;cursor:pointer;user-select:none}
+thead tr{background:var(--bg);box-shadow:0 1px 0 var(--line)}
+th{height:40px;padding:0 16px;text-align:left;font-size:12px;font-weight:500;color:var(--text3);white-space:nowrap;cursor:pointer;user-select:none;transition:color 120ms var(--ease)}
+th:first-child,td:first-child{padding-left:24px}
+th:last-child,td:last-child{padding-right:24px}
 th:hover{color:var(--text)}
 th.num{text-align:right}
-th .sort-icon{margin-left:4px;opacity:.4;font-size:10px}
-th.sorted .sort-icon{opacity:1;color:var(--gold)}
-tbody tr{border-bottom:1px solid rgba(255,255,255,.04);transition:background .1s}
-tbody tr:hover{background:rgba(255,255,255,.04)}
-td{padding:8px 14px;font-size:13px;vertical-align:middle}
-td.num{text-align:right}
-td.icon-cell{width:36px;padding:6px 8px}
+th .sort-icon{margin-left:4px;opacity:.5;font-size:10px}
+th.sorted{color:var(--text)}
+th.sorted .sort-icon{opacity:1;color:var(--accent)}
+tbody tr{border-bottom:1px solid var(--line);transition:background-color 120ms var(--ease)}
+tbody tr:hover{background:var(--card)}
+td{height:44px;padding:4px 16px;font-size:14px;vertical-align:middle}
+td.num{text-align:right;font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums}
+td.icon-cell{width:56px;padding:4px 0 4px 24px}
 td.icon-cell img{width:28px;height:28px;object-fit:contain;display:block}
-td.name-cell{max-width:260px}
-.item-name{font-size:13px;font-weight:500}
-.item-base{font-size:11px;color:var(--text2);margin-top:1px}
-td.qty-cell{color:var(--text);font-weight:600;font-size:13px}
-td.price-cell{color:#e8d890}
-td.total-cell{color:var(--gold2);font-weight:700}
-td.no-price{color:var(--text3);font-size:12px;white-space:nowrap}
-tbody tr:nth-child(even){background:rgba(255,255,255,0.03)}
-tbody tr:hover{background:rgba(255,255,255,0.07)!important}
+td.name-cell{min-width:200px;max-width:320px}
+.item-name{font-size:14px;font-weight:500}
+.item-base{font-size:12px;line-height:16px;color:var(--text3)}
+td.qty-cell{color:var(--text)}
+td.price-cell{color:var(--text)}
+td.total-cell{color:var(--text);font-weight:500}
+td.no-price{color:var(--text3);font-family:inherit;font-size:12px;white-space:nowrap}
 td.real-price-cell{padding:4px 8px}
-td.real-price-cell input{width:90px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:3px 6px;border-radius:3px;font-size:12px;outline:none;text-align:right}
-td.real-price-cell input:focus{border-color:var(--accent)}
-td.real-price-cell input.err{border-color:var(--red);color:var(--red)}
-td.calc-cell{color:#7ec8a0;font-size:12px;text-align:right;white-space:nowrap;cursor:pointer}
-td.calc-qty-cell{color:var(--text2);font-size:12px;text-align:right;white-space:nowrap;cursor:pointer}
-td.tab-cell{color:var(--text2);font-size:12px}
-.rarity-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;flex-shrink:0}
+td.real-price-cell input{width:96px;height:28px;background:var(--card);border:1px solid var(--line-strong);color:var(--text);padding:0 8px;border-radius:6px;font-family:var(--mono);font-size:12px;outline:none;text-align:right;transition:border-color 160ms var(--ease)}
+td.real-price-cell input.err{border-color:var(--neg);color:var(--neg)}
+td.calc-cell{color:var(--pos);font-size:12px;white-space:nowrap;cursor:pointer}
+td.calc-qty-cell{color:var(--text2);font-size:12px;white-space:nowrap;cursor:pointer}
+td.tab-cell{color:var(--text3);font-size:13px}
 .name-wrap{display:flex;align-items:center}
-.r-Normal .rarity-dot{background:var(--normal)}
-.r-Magic .rarity-dot{background:var(--magic)}
-.r-Rare .rarity-dot{background:var(--rare)}
-.r-Unique .rarity-dot{background:var(--unique)}
-.r-Gem .rarity-dot{background:var(--gem)}
-.r-Currency .rarity-dot{background:var(--currency)}
-.r-Divination .rarity-dot{background:#a66}
 .r-Normal .item-name{color:var(--normal)}
 .r-Magic .item-name{color:var(--magic)}
 .r-Rare .item-name{color:var(--rare)}
 .r-Unique .item-name{color:var(--unique)}
 .r-Gem .item-name{color:var(--gem)}
 .r-Currency .item-name{color:var(--currency)}
-.r-Divination .item-name{color:#c88}
+.r-Divination .item-name{color:var(--div)}
 
 /* ── STATUS BAR ── */
-.statusbar{background:var(--bg2);border-top:1px solid var(--border);padding:5px 16px;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:8px;height:28px}
-.statusbar.error{color:var(--red)}
-.statusbar.success{color:var(--green2)}
-.progress{flex:1;max-width:200px;height:3px;background:var(--bg3);border-radius:2px;overflow:hidden}
-.progress-fill{height:100%;background:var(--accent);width:0%;transition:width .2s}
+.statusbar{border-top:1px solid var(--line);padding:0 24px;font-size:12px;color:var(--text3);display:flex;align-items:center;gap:12px;height:32px}
+.statusbar.error{color:var(--neg)}
+.statusbar.success{color:var(--pos)}
+.progress{flex:1;max-width:200px;height:2px;background:var(--raised);border-radius:2px;overflow:hidden}
+.progress-fill{height:100%;background:var(--accent);width:0%;transition:width 200ms var(--ease)}
 
 /* ── EMPTY ── */
-.empty{text-align:center;padding:60px 20px;color:var(--text3)}
-.empty .ico{font-size:40px;opacity:.3;margin-bottom:12px}
+.empty{text-align:center;padding:96px 24px;color:var(--text3)}
+.empty .ico{display:flex;justify-content:center;margin-bottom:16px}
+.empty .ico svg.i{width:32px;height:32px}
 
 /* ── SCROLLBAR ── */
-::-webkit-scrollbar{width:6px;height:6px}
-::-webkit-scrollbar-track{background:var(--bg2)}
-::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:#555}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--raised);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:#3a3a3d}
 
 @media(max-width:900px){
-  .topbar input[type=password]{width:140px}
+  .topbar{padding:12px 16px}
+  .topbar input,.topbar input[type=password]{width:152px}
   .wealth-breakdown{display:none}
-  .sidebar{width:140px;min-width:140px}
+  .sidebar{width:184px;min-width:184px;padding:12px 8px}
+  .toolbar,.wealth-header,.statusbar{padding-left:16px;padding-right:16px}
+  th:first-child,td:first-child,td.icon-cell{padding-left:16px}
+  th:last-child,td:last-child{padding-right:16px}
 }
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
 
 <!-- TOP BAR -->
 <div class="topbar">
-  <span class="topbar-logo">⚔ PoE Stash</span>
-  <span class="sync-info" id="appVersion" title="เวอร์ชันที่ deploy">v__VERSION__</span>
+  <div class="brand">
+    <span class="topbar-logo">PoE Stash</span>
+    <span class="sync-info" id="appVersion" title="เวอร์ชันที่ deploy">v__VERSION__</span>
+  </div>
   <div class="topbar-group">
-    <span style="font-size:11px;color:var(--text2)">Account</span>
+    <span class="field-label">Account</span>
     <input id="account" type="text" value="" placeholder="Account Name"/>
   </div>
   <div class="topbar-group">
-    <span style="font-size:11px;color:var(--text2)">POESESSID</span>
+    <span class="field-label">POESESSID</span>
     <input id="sessid" type="password" value="" placeholder="POESESSID"/>
   </div>
   <div class="topbar-group">
-    <span style="font-size:11px;color:var(--text2)">League</span>
+    <span class="field-label">League</span>
     <select id="league">
       <option value="Allflame" selected>Allflame</option>
       <option value="Hardcore Allflame">HC Allflame</option>
@@ -188,11 +206,11 @@ td.tab-cell{color:var(--text2);font-size:12px}
 
   <!-- SIDEBAR -->
   <div class="sidebar">
-    <div class="sidebar-title">Tracked Tabs</div>
-    <div id="tabList"><div style="padding:20px 14px;color:var(--text3);font-size:12px">กด "โหลด Tabs" ก่อน</div></div>
+    <div class="sidebar-title">Tracked tabs</div>
+    <div id="tabList"><div style="padding:8px;color:var(--text3);font-size:13px">กด "โหลด Tabs" ก่อน</div></div>
     <div class="sidebar-actions" id="sidebarActions" style="display:none">
-      <button class="btn btn-ghost" onclick="selectAll(true)" style="font-size:11px;padding:4px">ทั้งหมด</button>
-      <button class="btn btn-ghost" onclick="selectAll(false)" style="font-size:11px;padding:4px">ล้าง</button>
+      <button class="btn btn-ghost" onclick="selectAll(true)">ทั้งหมด</button>
+      <button class="btn btn-ghost" onclick="selectAll(false)">ล้าง</button>
     </div>
   </div>
 
@@ -202,10 +220,10 @@ td.tab-cell{color:var(--text2);font-size:12px}
     <!-- WEALTH HEADER -->
     <div class="wealth-header" id="wealthHeader" style="display:none">
       <div>
-        <div style="font-size:11px;color:var(--text2);margin-bottom:2px">Total Wealth</div>
-        <div style="display:flex;align-items:baseline;gap:8px">
+        <div class="wealth-label">Total wealth</div>
+        <div class="wealth-row">
           <span class="wealth-value" id="wealthVal">0<span class="unit">c</span></span>
-          <span id="wealthDiv" style="color:var(--gold);font-size:14px"></span>
+          <span class="wealth-div" id="wealthDiv"></span>
         </div>
       </div>
       <div class="wealth-breakdown" id="breakdownList"></div>
@@ -214,8 +232,8 @@ td.tab-cell{color:var(--text2);font-size:12px}
     <!-- TOOLBAR -->
     <div class="toolbar">
       <div class="search-wrap">
-        <span class="search-icon">🔍</span>
-        <input id="search" type="text" placeholder="Search (ชื่อไอเทม…)" oninput="renderTable()"/>
+        <span class="search-icon"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
+        <input id="search" type="text" placeholder="ค้นหาชื่อไอเทม" oninput="renderTable()"/>
       </div>
       <select class="filter-select" id="filterRarity" onchange="renderTable()">
         <option value="">All Rarity</option>
@@ -235,14 +253,14 @@ td.tab-cell{color:var(--text2);font-size:12px}
       <div class="total-badge" id="selectedTotal" style="display:none">Selected total: <span>0c</span></div>
       <div class="toolbar-right">
         <span class="sync-info" id="syncInfo"></span>
-        <button class="btn-load" id="btnLoad" onclick="loadSelected()" style="display:none" disabled>⚔ Load Items</button>
-        <button class="btn btn-ghost" onclick="exportCSV()" id="btnExport" style="display:none">⬇ CSV</button>
+        <button class="btn-load" id="btnLoad" onclick="loadSelected()" style="display:none" disabled>Load items</button>
+        <button class="btn btn-ghost" onclick="exportCSV()" id="btnExport" style="display:none"><svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>CSV</button>
       </div>
     </div>
 
     <!-- TABLE -->
     <div class="table-container" id="tableContainer">
-      <div class="empty"><div class="ico">🗡️</div><p>โหลด Tabs แล้วเลือก tab ที่ต้องการ</p></div>
+      <div class="empty"><div class="ico"><svg class="i" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></div><p>โหลด Tabs แล้วเลือก tab ที่ต้องการ</p></div>
     </div>
 
     <!-- STATUS BAR -->
@@ -291,13 +309,8 @@ let divinePrice  = 1;
 let mirrorDivine = null;  // ราคา Mirror of Kalandra เป็น divine
 let scarabMap    = {};   // scarab name.lower → { chaosValue, icon }
 
-const TAB_ICONS = {
-  CurrencyStash:'💰', MapStash:'🗺️', GemStash:'💎', DivinationStash:'🃏',
-  EssenceStash:'🧿', FragmentStash:'🔮', DelveStash:'⛏️', BlightStash:'🌿',
-  UltimatumStash:'⚡', DeliriumStash:'🌀', PremiumStash:'📦', NormalStash:'📦',
-  UniqueStash:'⭐', FlaskStash:'⚗️', MetamorphStash:'🧬', HeistStash:'🗝️',
-};
-function tabIcon(type){ return TAB_ICONS[type] || '📦'; }
+const TAB_ICON_SVG = "<svg class=\"i\" viewBox=\"0 0 24 24\"><path d=\"m7.5 4.27 9 5.15\"/><path d=\"M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z\"/><path d=\"m3.3 7 8.7 5 8.7-5\"/><path d=\"M12 22V12\"/></svg>";
+function tabIcon(type){ return TAB_ICON_SVG; }
 
 // ── INIT ──
 async function init(){
@@ -337,11 +350,11 @@ async function init(){
     loadTrackedTabs();
     renderSidebar();
     document.getElementById('sidebarActions').style.display='flex';
-    document.getElementById('btnLoad').style.display='block';
+    document.getElementById('btnLoad').style.display='inline-flex';
     document.getElementById('btnLoad').disabled = checkedTabs.size===0;
     setStatus(`พบ ${data.tabs.length} tabs — เลือก tab แล้วกด Load Items`,'success');
   }catch(e){
-    setStatus(`⚠ ${e.message}`,'error');
+    setStatus(`${e.message}`,'error');
   }finally{
     setTimeout(()=>{ document.getElementById('progressWrap').style.display='none'; setProgress(0); }, 600);
   }
@@ -355,7 +368,7 @@ function renderSidebar(){
     if(tab.hidden || (tab.n||'').includes('Unavailable')) return '';
     const checked = checkedTabs.has(i);
     const icon = tabIcon(tab.type);
-    const col = tab.colour ? `color:rgb(${tab.colour.r||200},${tab.colour.g||200},${tab.colour.b||200})` : '';
+    const col = '';
     const iconSrc = STASH_ICONS[tab.type] || tab.srcC || null;
     const tabImg = iconSrc
       ? `<img src="${escHtml(iconSrc)}" class="tab-img" alt="${escHtml(tab.type||'')}"/>`
@@ -428,7 +441,7 @@ async function loadSelected(){
       if(data.items) data.items.forEach(it=>{it._tabName=tab.n;it._tabType=tab.type;});
       combined=combined.concat(data.items||[]);
     }catch(e){
-      setStatus(`⚠ ${e.message}`,'error');
+      setStatus(`${e.message}`,'error');
       btn.disabled=false; setProgress(0);
       document.getElementById('progressWrap').style.display='none'; return;
     }
@@ -441,7 +454,7 @@ async function loadSelected(){
   const now=new Date(); document.getElementById('syncInfo').textContent=`Synced ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
   setStatus(`โหลดสำเร็จ — ${combined.length} items จาก ${selected.length} tab`,'success');
   btn.disabled=false;
-  document.getElementById('btnExport').style.display='block';
+  document.getElementById('btnExport').style.display='inline-flex';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1097,7 +1110,7 @@ function renderTable(){
   totalBadge.innerHTML=`Selected total: <span>${formatChaos(totalChaos)}</span>`;
 
   if(!filtered.length){
-    document.getElementById('tableContainer').innerHTML=`<div class="empty"><div class="ico">🔍</div><p>ไม่พบไอเทมที่ตรงกับเงื่อนไข</p></div>`;
+    document.getElementById('tableContainer').innerHTML=`<div class="empty"><div class="ico"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>ไม่พบไอเทมที่ตรงกับเงื่อนไข</p></div>`;
     return;
   }
 
@@ -1109,8 +1122,8 @@ function renderTable(){
 
   const rows=filtered.map(it=>{
     // Link badge
-    const linkBadge = it.links >= 5 ? `<span style="font-size:10px;color:${it.links===6?'#e8d890':'#aaa'};margin-left:4px">${it.links}L</span>` : '';
-    const corruptBadge = (it.corrupted && it.rarity !== 'Gem') ? `<span style="font-size:10px;color:#e57373;margin-left:3px">C</span>` : '';
+    const linkBadge = it.links >= 5 ? `<span style="font-size:10px;color:${it.links===6?'var(--accent)':'var(--text3)'};margin-left:4px;font-family:var(--mono)">${it.links}L</span>` : '';
+    const corruptBadge = (it.corrupted && it.rarity !== 'Gem') ? `<span style="font-size:10px;color:var(--neg);margin-left:4px;font-family:var(--mono)">C</span>` : '';
     return `
     <tr data-qty="${it.qty}">
       <td class="icon-cell">${it.icon?`<img src="${escHtml(it.icon)}" loading="lazy" alt=""/>`:'<div style="width:28px;height:28px;background:var(--bg3);border-radius:2px"></div>'}</td>
@@ -1169,7 +1182,7 @@ async function loadScarabPrices(league){
 }
 
 async function loadNinjaPrices(league){
-  setBadge('loading','⏳ poe.ninja…');
+  setBadge('loading','poe.ninja…');
   try{
     const res=await fetch(`${API_BASE}/api/ninja-prices?league=${enc(league)}`);
     if(!res.ok)throw new Error(`HTTP ${res.status}`);
@@ -1182,9 +1195,9 @@ async function loadNinjaPrices(league){
     mirrorDivine = data.mirrorDivine || null;
     const cnt   = Object.keys(ninjaMap).length;
     const sn    = Object.keys(stashItems).length;
-    setBadge('ok',`✓ poe.ninja ${cnt.toLocaleString()} + ${sn.toLocaleString()} variants · 1d=${Math.round(divinePrice)}c`);
+    setBadge('ok',`poe.ninja ${cnt.toLocaleString()} + ${sn.toLocaleString()} variants · 1d=${Math.round(divinePrice)}c`);
     if(allItems.length){renderTable();updateWealth();}
-  }catch(e){console.error(e);setBadge('error','✗ poe.ninja ล้มเหลว');}
+  }catch(e){console.error(e);setBadge('error','poe.ninja ล้มเหลว');}
 
 }
 
@@ -1260,7 +1273,7 @@ function formatChaos(v){
 }
 function formatChaosSmall(v){
   if(v===null)return'—';
-  if(v>=100)return Math.round(v).toString();
+  if(v>=100)return Math.round(v).toLocaleString();
   if(v>=1)return v.toFixed(1);
   return v.toFixed(3);
 }
